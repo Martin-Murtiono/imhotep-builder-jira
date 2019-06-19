@@ -105,7 +105,6 @@ public class JiraActionsIndexBuilderCommandLine {
                     .iuploadUsername(iuploadUsername)
                     .iuploadPassword(iuploadPassword)
                     .startDate(startDate)
-                    .endDate(endDate)
                     .jiraBatchSize(jiraBatchSize)
                     .indexName(indexName)
                     .customFields(customFieldDefinitions)

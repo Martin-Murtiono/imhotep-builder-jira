@@ -79,8 +79,8 @@ public class IssuesAPICaller {
     private JsonNode getIssuesNode() throws IOException {
         final JsonNode apiRes = apiCaller.getJsonNode(getIssuesURL());
         setNextPage();
-        //this.numTotal = apiRes.get("total").intValue();
-        this.numTotal = 1;
+        this.numTotal = apiRes.get("total").intValue();
+        //this.numTotal = 1;
         return apiRes.get("issues");
     }
 
@@ -88,7 +88,7 @@ public class IssuesAPICaller {
         final JsonNode apiRes = apiCaller.getJsonNode(getBasicInfoURL());
         final JsonNode totalNode = apiRes.path("total");
         final int total = totalNode.intValue();
-        this.numTotal = 1;
+        this.numTotal = total;
         return numTotal;
     }
 

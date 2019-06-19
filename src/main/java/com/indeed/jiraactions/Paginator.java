@@ -102,10 +102,9 @@ public class Paginator {
                     break;
                 }
             }
-            break;
-//            pageProvider.reset();
-//            firstPass = false;
-//            log.info("Starting over to pick up lost issues.");
+            pageProvider.reset();
+            firstPass = false;
+            log.info("Starting over to pick up lost issues.");
         }
     }
 
