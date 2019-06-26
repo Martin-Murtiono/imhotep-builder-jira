@@ -9,10 +9,6 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 
-/**
- * @author mmurtiono
- */
-
 public class StatusTypesApiCaller {
     private static final String API_PATH = "/rest/api/2/status";
 

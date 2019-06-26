@@ -8,9 +8,9 @@
     </parent>
 
     <groupId>com.indeed</groupId>
-    <artifactId>imhotep-builder-jira</artifactId>
-    <name>imhotep-builder-jira</name>
-    <version>1.0.3-SNAPSHOT</version>
+    <artifactId>imhotep-builder-jiraissues</artifactId>
+    <name>imhotep-builder-jiraissues</name>
+    <version>1.0.0-SNAPSHOT</version>
     <description>
         Builder that uploads daily TSVs of JIRA activity to Imhotep
     </description>
@@ -50,7 +50,7 @@
             <artifactId>slf4j-simple</artifactId>
             <version>${slf4j.version}</version>
             <scope>test</scope>
-        </dependency>
+	</dependency>
 
         <dependency>
             <groupId>com.indeed</groupId>
@@ -130,6 +130,12 @@
           <groupId>com.fasterxml.jackson.core</groupId>
           <artifactId>jackson-core</artifactId>
             <version>${jackson-core.version}</version>
+        </dependency>
+		
+		<dependency>
+          <groupId>com.squareup.okhttp3</groupId>
+          <artifactId>okhttp</artifactId>
+            <version>3.14.0</version>
         </dependency>
 
         <!-- Test dependencies -->

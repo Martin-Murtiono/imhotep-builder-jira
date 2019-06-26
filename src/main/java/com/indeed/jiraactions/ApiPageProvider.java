@@ -5,7 +5,6 @@ import com.google.common.base.Stopwatch;
 import com.indeed.jiraactions.api.IssueAPIParser;
 import com.indeed.jiraactions.api.IssuesAPICaller;
 import com.indeed.jiraactions.api.customfields.CustomFieldDefinition;
-import com.indeed.jiraactions.api.customfields.CustomFieldValue;
 import com.indeed.jiraactions.api.response.issue.Issue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

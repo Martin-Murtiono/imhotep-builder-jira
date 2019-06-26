@@ -2,7 +2,6 @@ package com.indeed.jiraactions;
 
 import com.indeed.jiraactions.api.customfields.CustomFieldDefinition;
 
-import com.indeed.jiraactions.api.statustimes.StatusTime;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpResponse;
@@ -14,7 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.joda.time.DateMidnight;
 import org.joda.time.DateTime;
-import org.joda.time.Days;
 
 import java.io.BufferedWriter;
 import java.io.File;

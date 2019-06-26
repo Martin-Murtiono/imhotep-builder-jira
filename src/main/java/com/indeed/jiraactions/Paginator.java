@@ -70,7 +70,7 @@ public class Paginator {
                         final List<Action> preFilteredActions = pageProvider.getActions(issue);
                         final List<Action> actions = getActionsFilterByLastSeen(seenIssues, issue, preFilteredActions);
                         final List<Action> filteredActions = actions.stream().filter(a -> a.isBefore(startDate)).collect(Collectors.toList());
-                        log.debug(String.valueOf(filteredActions));
+                        //log.debug(String.valueOf(filteredActions));
                         pageProvider.writeActions(filteredActions);
 
 

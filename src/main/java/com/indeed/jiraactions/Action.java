@@ -11,7 +11,6 @@ import org.immutables.value.Value;
 import org.joda.time.DateTime;
 
 import javax.annotation.Nullable;
-import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.Set;
 import java.util.List;

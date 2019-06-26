@@ -2,6 +2,7 @@ package com.indeed.jiraactions.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Stopwatch;
 import com.indeed.jiraactions.JiraActionsIndexBuilderConfig;
 import com.indeed.jiraactions.JiraActionsUtil;
 import org.apache.commons.lang.StringUtils;
@@ -16,6 +17,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.Arrays;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -77,10 +79,17 @@ public class IssuesAPICaller {
     }
 
     private JsonNode getIssuesNode() throws IOException {
+        Stopwatch test1 = Stopwatch.createStarted();
         final JsonNode apiRes = apiCaller.getJsonNode(getIssuesURL());
+        log.debug("HTTPSURLConnection: {}", test1.elapsed(TimeUnit.MILLISECONDS));
+//        Stopwatch test2 = Stopwatch.createStarted();
+//        final JsonNode okhttp = apiCaller.okhttp(getIssuesURL());
+//        log.debug("OkHTTP Time: {}", test2.elapsed(TimeUnit.MILLISECONDS));
+
+        test1.stop();
+//        test2.stop();
         setNextPage();
         this.numTotal = apiRes.get("total").intValue();
-        //this.numTotal = 1;
         return apiRes.get("issues");
     }
 
