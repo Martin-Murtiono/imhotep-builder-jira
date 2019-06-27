@@ -3,6 +3,8 @@ package com.indeed.jiraactions.api;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.indeed.jiraactions.JiraActionsIndexBuilderConfig;
+import okhttp3.CacheControl;
+import okhttp3.ConnectionPool;
 import okhttp3.Headers;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -21,13 +23,16 @@ import java.net.URL;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 public class ApiCaller {
     protected final JiraActionsIndexBuilderConfig config;
 
     private static final Logger log = LoggerFactory.getLogger(ApiCaller.class);
     private static final ObjectMapper objectMapper = new ObjectMapper();
-    private static final OkHttpClient client = new OkHttpClient();
+    private final OkHttpClient client;
+    private final CacheControl cacheControl;
+    private final ConnectionPool connectionPool = new ConnectionPool();
     private final String authentication;
     private String jsessionId = null;
     private String upstream = null;
@@ -37,15 +42,21 @@ public class ApiCaller {
     public ApiCaller(final JiraActionsIndexBuilderConfig config) {
         this.config = config;
         this.authentication = getBasicAuth();
+
+        this.cacheControl = new CacheControl.Builder()
+                .noStore()
+                .noCache()
+                .build();
+        this.client = new OkHttpClient.Builder()
+                .connectionPool(connectionPool)
+                .build();
     }
 
-
-
     public JsonNode getJsonNode(final String url) throws IOException {
-        client.connectionPool();
         Request request = new Request.Builder()
                 .header("Authorization", this.authentication)
                 .url(url)
+                .cacheControl(cacheControl)
                 .build();
         Response response = client.newCall(request).execute();
         try (ResponseBody responseBody = response.body()){

@@ -81,13 +81,9 @@ public class IssuesAPICaller {
     private JsonNode getIssuesNode() throws IOException {
         Stopwatch test1 = Stopwatch.createStarted();
         final JsonNode apiRes = apiCaller.getJsonNode(getIssuesURL());
-        log.debug("HTTPSURLConnection: {}", test1.elapsed(TimeUnit.MILLISECONDS));
-//        Stopwatch test2 = Stopwatch.createStarted();
-//        final JsonNode okhttp = apiCaller.okhttp(getIssuesURL());
-//        log.debug("OkHTTP Time: {}", test2.elapsed(TimeUnit.MILLISECONDS));
+        log.debug("Get Issues Time: {}", test1.elapsed(TimeUnit.MILLISECONDS));
 
         test1.stop();
-//        test2.stop();
         setNextPage();
         this.numTotal = apiRes.get("total").intValue();
         return apiRes.get("issues");

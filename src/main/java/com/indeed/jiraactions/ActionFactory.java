@@ -139,7 +139,7 @@ public class ActionFactory {
 
     private String dateResolved(final Action prevAction, final History history) {
         String resolution = history.itemExist("resolution") ? history.getItemLastValue("resolution") : prevAction.getResolution();
-        if (resolution.equals("Fixed")){
+        if (!resolution.isEmpty() && prevAction.getResolution().isEmpty()){
             return history.created.toDateTimeISO().toString();
         }
         return "";
@@ -158,7 +158,7 @@ public class ActionFactory {
     }
 
     private List<StatusTime> getStatusTime(List<StatusTime> list, final History history, final Action prevAction) {
-        List<StatusTime> st = new ArrayList<>(list);
+        final List<StatusTime> st = new ArrayList<>(list);
         String status = history.itemExist("status") ? history.getItemLastValue("status") : prevAction.getStatus();
         st.set(st.size()-1, statusTimeFactory.updateStatus(st.get(st.size()-1), getTimeDiff(prevAction.getTimestamp(), history.created)));
         if (!status.equals(prevAction.getStatus())) {

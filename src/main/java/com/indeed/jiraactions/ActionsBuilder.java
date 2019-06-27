@@ -58,6 +58,7 @@ public class ActionsBuilder {
     //
 
     private void setUpdateActions(int index) {
+        issue.changelog.sortHistories();
         actions.set(0, actionFactory.update(actions.get(0), histories.get(index)));
     }
 
@@ -66,6 +67,7 @@ public class ActionsBuilder {
     //
 
     private void setCommentActions(int index) {
+        issue.fields.comment.sortComments();
         actions.set(0, actionFactory.comment(actions.get(0), comments.get(index)));
     }
 
@@ -114,17 +116,13 @@ public class ActionsBuilder {
     private List<History> sortLatestHistories(final Issue issue) {
         issue.changelog.sortHistories();
         final History[] histories = issue.changelog.histories;
-        final List<History> listHistories = new ArrayList<>(histories.length);
-        listHistories.addAll(Arrays.asList(histories));
-        return listHistories.stream().filter(a -> a.isBefore(startDate)).collect(Collectors.toList());
+        return Arrays.stream(histories).filter(a -> a.isBefore(startDate)).collect(Collectors.toList());
     }
 
     private List<Comment> sortLatestComments(final Issue issue) {
         issue.fields.comment.sortComments();
         final Comment[] comments = issue.fields.comment.comments;
-        final List<Comment> listComments = new ArrayList<>(comments.length);
-        listComments.addAll(Arrays.asList(comments));
-        return listComments.stream().filter(a -> a.isBefore(startDate)).collect(Collectors.toList());
+        return Arrays.stream(comments).filter(a -> a.isBefore(startDate)).collect(Collectors.toList());
     }
 
 }

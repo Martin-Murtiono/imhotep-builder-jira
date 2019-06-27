@@ -66,7 +66,9 @@ public class ApiPageProvider implements PageProvider {
     }
 
     @Override
-    public boolean hasPage() { return issuesAPICaller.currentPageExist(); }
+    public boolean hasPage() {
+        return issuesAPICaller.currentPageExist();
+    }
 
     @Override
     public JsonNode getRawPage() throws InterruptedException {
