@@ -31,8 +31,6 @@ public class ApiCaller {
     private static final Logger log = LoggerFactory.getLogger(ApiCaller.class);
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private final OkHttpClient client;
-    private final CacheControl cacheControl = new CacheControl.Builder().noStore().noCache().build();
-    private final ConnectionPool connectionPool = new ConnectionPool();
     private final String authentication;
     private String jsessionId = null;
     private String upstream = null;
@@ -43,7 +41,7 @@ public class ApiCaller {
         this.config = config;
         this.authentication = getBasicAuth();
         this.client = new OkHttpClient.Builder()
-                .connectionPool(connectionPool)
+                .connectionPool(new ConnectionPool())
                 .connectTimeout(1, TimeUnit.MINUTES)
                 .readTimeout(20, TimeUnit.SECONDS)
                 .build();
@@ -53,9 +51,8 @@ public class ApiCaller {
         OkHttpClient newClient = client.newBuilder().build();
         Request request = new Request.Builder()
                 .header("Authorization", this.authentication)
-                .header("Cache-Control", "no-cache")
+                .header("Cache-Control", "no-store")
                 .url(url)
-                .cacheControl(cacheControl)
                 .build();
         Response response = newClient.newCall(request).execute();
         try (ResponseBody responseBody = response.body()){
