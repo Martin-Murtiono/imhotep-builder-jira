@@ -1,7 +1,6 @@
 package com.indeed.jiraactions;
 
 import com.indeed.jiraactions.api.response.issue.Issue;
-import com.indeed.jiraactions.api.response.issue.changelog.ChangeLog;
 import com.indeed.jiraactions.api.response.issue.changelog.histories.History;
 import com.indeed.jiraactions.api.response.issue.fields.comment.Comment;
 import org.slf4j.Logger;
@@ -12,8 +11,6 @@ import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Collections;
-import java.util.Arrays;
 import java.util.stream.Collectors;
 
 public class ActionsBuilder {
@@ -21,28 +18,30 @@ public class ActionsBuilder {
 
     private final Issue issue;
     private final DateTime startDate;
-    private final ActionFactory actionFactory;
-    private final List<History> histories;
-    private final List<Comment> comments;
+    private final DateTime endDate;
     private final List<Action> actions;
+    private final ActionFactory actionFactory;
 
-
-    public ActionsBuilder(final ActionFactory actionFactory, final Issue issue, final DateTime startDate) {
+    public ActionsBuilder(final ActionFactory actionFactory, final Issue issue, final DateTime startDate, final DateTime endDate) {
         this.actionFactory = actionFactory;
         this.issue = issue;
         this.startDate = startDate;
+        this.endDate = endDate;
 
         actions = new ArrayList<>(issue.changelog.histories.length + issue.fields.comment.comments.length);
-        histories = sortLatestHistories(issue);
-        comments = sortLatestComments(issue);
     }
 
     @Nonnull
     public List<Action> buildActions() throws IOException {
         setCreateAction();
-        compare();
-        setActionToCurrent();
+        setUpdateActions();
+        setCommentActions();
         return actions;
+    }
+
+    @Nonnull
+    public Action buildJiraIssues(Action action) throws IOException {
+        return setUpdateToCurrent(action);
     }
 
     //
@@ -50,79 +49,82 @@ public class ActionsBuilder {
     //
 
     private void setCreateAction() throws IOException {
-        actions.add(actionFactory.create(issue));
+        final Action createAction = actionFactory.create(issue);
+        actions.add(createAction);
     }
 
     //
     // For Update Action
     //
 
-    private void setUpdateActions(int index) {
+    private void setUpdateActions() {
         issue.changelog.sortHistories();
-        actions.set(0, actionFactory.update(actions.get(0), histories.get(index)));
+
+        Action prevAction = actions.get(actions.size()-1); // safe because we always add the create action
+        for (final History history : issue.changelog.histories) {
+            final Action updateAction = actionFactory.update(prevAction, history);
+            actions.add(updateAction);
+            prevAction = updateAction;
+        }
     }
 
     //
     // For Comment Action
     //
 
-    private void setCommentActions(int index) {
+    private void setCommentActions() {
         issue.fields.comment.sortComments();
-        actions.set(0, actionFactory.comment(actions.get(0), comments.get(index)));
-    }
 
-    //
-    // Updating Action to Given Date
-    //
-
-    private void setActionToCurrent() {
-        actions.set(0, actionFactory.toCurrent(actions.get(0)));
-    }
-
-    private void compare() {
-        int historyIndex = 0;
-        int commentIndex = 0;
-        for(Comment comment : comments) {
-            if (comment.isBefore(actions.get(0).getTimestamp())) {
-                LOG.debug("Skipping comment {} on {} because it's before the issue was created.", comment.id, issue.key);
-                commentIndex++;
-            }
-        }
-        while (true) {
-            if (historyIndex >= histories.size() || commentIndex >= comments.size()) {
-                if (commentIndex >= comments.size()) {
-                    if (historyIndex >= histories.size()) {
+        int currentActionIndex = 0;
+        for (final Comment comment : issue.fields.comment.comments) {
+            while (true) {
+                if (commentIsRightAfter(comment, currentActionIndex)) {
+                    final Action commentAction = actionFactory.comment(actions.get(currentActionIndex), comment);
+                    actions.add(currentActionIndex + 1, commentAction);
+                    break;
+                } else {
+                    currentActionIndex++;
+                    if (currentActionIndex >= actions.size()) {
+                    /* You'd think this would never happen, but it can. I found legitimate examples with a comment
+                     * on a ticket *before* that ticket was created.
+                     */
+                        if (comment.created.isBefore(actions.get(0).getTimestamp())) {
+                            LOG.debug("Skipping comment {} on {} because it's before the issue was created.",
+                                    comment.id, issue.key);
+                        } else {
+                            LOG.debug("Unable to process comment {} by {} on issue {}, somehow doesn't fit in our timeline.",
+                                    comment.id, comment.author.getDisplayName(), issue.key, comment.author.getDisplayName());
+                        }
+                        currentActionIndex = 0;
                         break;
-                    } else {
-                        setUpdateActions(historyIndex);
-                        historyIndex++;
                     }
-                } else {
-                    setCommentActions(commentIndex);
-                    commentIndex++;
-                }
-            } else {
-                if (histories.get(historyIndex).created.isBefore(comments.get(commentIndex).created)) {
-                    setUpdateActions(historyIndex);
-                    historyIndex++;
-                } else {
-                    setCommentActions(commentIndex);
-                    commentIndex++;
                 }
             }
         }
     }
 
-    private List<History> sortLatestHistories(final Issue issue) {
-        issue.changelog.sortHistories();
-        final History[] histories = issue.changelog.histories;
-        return Arrays.stream(histories).filter(a -> a.isBefore(startDate)).collect(Collectors.toList());
+    private Action setUpdateToCurrent(Action prevAction) {
+        return actionFactory.toCurrent(prevAction);
     }
 
-    private List<Comment> sortLatestComments(final Issue issue) {
-        issue.fields.comment.sortComments();
-        final Comment[] comments = issue.fields.comment.comments;
-        return Arrays.stream(comments).filter(a -> a.isBefore(startDate)).collect(Collectors.toList());
+    private boolean isCreatedDuringRange(final DateTime createdDate) {
+        return startDate.compareTo(createdDate) <= 0 && endDate.compareTo(createdDate) > 0;
     }
 
+    private boolean commentIsAfter(final Comment comment, final Action action) {
+        /* return true if comment is made after the action. Or if it's the same instant as the action, because some
+         * automated tools are that fast (or because of a comment made at the same time you do an edit.
+         */
+        final DateTime commentDate = comment.created;
+        final DateTime actionDate = action.getTimestamp();
+        return commentDate.isAfter(actionDate) || commentDate.isEqual(actionDate);
+    }
+
+    private boolean commentIsRightAfter(final Comment comment, final int actionIndex) {
+        final Action action = actions.get(actionIndex);
+        final int nextIndex = actionIndex + 1;
+        final Action nextAction = actions.size() > nextIndex ? actions.get(nextIndex) : null;
+        return commentIsAfter(comment, action) &&
+                ( nextAction == null || !commentIsAfter(comment, nextAction) );
+    }
 }

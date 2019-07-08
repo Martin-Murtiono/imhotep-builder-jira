@@ -32,6 +32,7 @@ public class ApiPageProvider implements PageProvider {
     @SuppressWarnings("FieldCanBeLocal")
 
     private final JiraActionsIndexBuilderConfig config;
+    private final DateTime endDate;
     private final Set<CustomFieldDefinition> customFieldsSeen;
 
     private long apiTime = 0;
@@ -46,6 +47,7 @@ public class ApiPageProvider implements PageProvider {
         this.tsvFileWriter = tsvFileWriter;
 
         this.startDate = JiraActionsUtil.parseDateTime(config.getStartDate());
+        this.endDate = JiraActionsUtil.parseDateTime(config.getEndDate());
         this.customFieldsSeen = new HashSet<>(config.getCustomFields().length);
     }
 
@@ -109,11 +111,10 @@ public class ApiPageProvider implements PageProvider {
         return issue;
     }
 
-    
     @Override
     public List<Action> getActions(final Issue issue) throws IOException {
         final Stopwatch stopwatch = Stopwatch.createStarted();
-        final ActionsBuilder actionsBuilder = new ActionsBuilder(actionFactory, issue, startDate);
+        final ActionsBuilder actionsBuilder = new ActionsBuilder(actionFactory, issue, startDate, endDate);
         final List<Action> actions = actionsBuilder.buildActions();
         stopwatch.stop();
 
@@ -129,12 +130,31 @@ public class ApiPageProvider implements PageProvider {
         return actions;
     }
 
+    @Override
+    public Action getJiraissues(final Action action, final Issue issue) throws IOException {
+        final Stopwatch stopwatch = Stopwatch.createStarted();
+        final ActionsBuilder actionsBuilder = new ActionsBuilder(actionFactory, issue, startDate, endDate);
+        final Action updatedAction = actionsBuilder.buildJiraIssues(action);
+        stopwatch.stop();
 
+        processTime += stopwatch.elapsed(TimeUnit.MILLISECONDS);
+
+        return updatedAction;
+    }
 
     @Override
     public void writeActions(final List<Action> actions) throws IOException {
         final Stopwatch stopwatch = Stopwatch.createStarted();
         tsvFileWriter.writeActions(actions);
+        stopwatch.stop();
+
+        fileTime += stopwatch.elapsed(TimeUnit.MILLISECONDS);
+    }
+
+    @Override
+    public void writeIssue(final Action action) throws IOException {
+        final Stopwatch stopwatch = Stopwatch.createStarted();
+        tsvFileWriter.writeIssue(action);
         stopwatch.stop();
 
         fileTime += stopwatch.elapsed(TimeUnit.MILLISECONDS);

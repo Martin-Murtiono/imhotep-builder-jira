@@ -2,7 +2,6 @@ package com.indeed.jiraactions.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Stopwatch;
 import com.indeed.jiraactions.JiraActionsIndexBuilderConfig;
 import com.indeed.jiraactions.JiraActionsUtil;
 import org.apache.commons.lang.StringUtils;
@@ -17,7 +16,6 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.Arrays;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -79,11 +77,7 @@ public class IssuesAPICaller {
     }
 
     private JsonNode getIssuesNode() throws IOException {
-        Stopwatch test1 = Stopwatch.createStarted();
         final JsonNode apiRes = apiCaller.getJsonNode(getIssuesURL());
-        log.debug("Get Issues Time: {}", test1.elapsed(TimeUnit.MILLISECONDS));
-
-        test1.stop();
         setNextPage();
         this.numTotal = apiRes.get("total").intValue();
         return apiRes.get("issues");
@@ -162,7 +156,9 @@ public class IssuesAPICaller {
          */
 
         final String start = getDateStringInJiraTime(config.getStartDate());
-        query.append("createdDate<\"").append(start).append("\"");
+        final String end = getDateStringInJiraTime(config.getEndDate());
+        query.append("updatedDate>=\"").append(start)
+                .append("\" AND createdDate<\"").append(end).append("\"");
 
         if(!StringUtils.isEmpty(config.getJiraProject())) {
             query.append(" AND project IN (").append(config.getJiraProject()).append(")");

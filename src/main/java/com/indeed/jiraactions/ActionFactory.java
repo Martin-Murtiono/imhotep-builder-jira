@@ -2,7 +2,6 @@ package com.indeed.jiraactions;
 
 import com.indeed.jiraactions.api.customfields.CustomFieldApiParser;
 import com.indeed.jiraactions.api.customfields.CustomFieldDefinition;
-import com.indeed.jiraactions.api.links.Link;
 import com.indeed.jiraactions.api.links.LinkFactory;
 import com.indeed.jiraactions.api.response.issue.Issue;
 import com.indeed.jiraactions.api.response.issue.User;
@@ -11,15 +10,11 @@ import com.indeed.jiraactions.api.response.issue.fields.comment.Comment;
 import com.indeed.jiraactions.api.statustimes.StatusTime;
 import com.indeed.jiraactions.api.statustimes.StatusTimeFactory;
 import org.joda.time.DateTime;
-import org.joda.time.format.DateTimeFormat;
 
 import java.io.IOException;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Date;
 import java.util.Objects;
 
 public class ActionFactory {
@@ -40,22 +35,26 @@ public class ActionFactory {
     }
 
     public Action create(final Issue issue) throws IOException {
-
         final User assignee = userLookupService.getUser(issue.initialValueKey("assignee", "assigneekey"));
         final User reporter = userLookupService.getUser(issue.initialValueKey("reporter", "reporterkey"));
         final ImmutableAction.Builder builder = ImmutableAction.builder()
-                .issuekey(issue.key)
+                .action("create")
                 .actor(issue.fields.creator == null ? User.INVALID_USER : issue.fields.creator)
                 .assignee(assignee)
+                .fieldschanged("created")
                 .issueage(0)
+                .issuekey(issue.key)
                 .issuetype(issue.initialValue("issuetype"))
                 .priority(issue.initialValue("priority"))
                 .project(issue.initialValue("project"))
                 .projectkey(issue.initialValue("projectkey"))
+                .prevstatus("")
                 .reporter(reporter)
                 .resolution(issue.initialValue("resolution"))
                 .status(issue.initialValue("status"))
                 .summary(issue.initialValue("summary"))
+                .timeinstate(0)
+                .timesinceaction(0)
                 .timestamp(issue.fields.created)
                 .category(issue.initialValue("category"))
                 .fixversions(issue.initialValue("fixversions"))
@@ -84,18 +83,23 @@ public class ActionFactory {
                 ? userLookupService.getUser(history.getItemLastValueKey("reporter"))
                 : prevAction.getReporter();
         final ImmutableAction.Builder builder = ImmutableAction.builder()
-                .issuekey(prevAction.getIssuekey())
+                .action("update")
                 .actor(history.author == null ? User.INVALID_USER: history.author)
                 .assignee(assignee)
+                .fieldschanged(history.getChangedFields())
                 .issueage(prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), history.created))
+                .issuekey(prevAction.getIssuekey())
                 .issuetype(history.itemExist("issuetype") ? history.getItemLastValue("issuetype") : prevAction.getIssuetype())
                 .priority(history.itemExist("priority") ? history.getItemLastValue("priority") : prevAction.getPriority())
                 .project(history.itemExist("project") ? history.getItemLastValue("project") : prevAction.getProject())
                 .projectkey(history.itemExist("projectkey") ? history.getItemLastValue("projectkey") : prevAction.getProjectkey())
+                .prevstatus(prevAction.getStatus())
                 .reporter(reporter)
                 .resolution(history.itemExist("resolution") ? history.getItemLastValue("resolution") : prevAction.getResolution())
                 .status(history.itemExist("status") ? history.getItemLastValue("status") : prevAction.getStatus())
                 .summary(history.itemExist("summary") ? history.getItemLastValue("summary") : prevAction.getSummary())
+                .timeinstate(timeInState(prevAction, history))
+                .timesinceaction(getTimeDiff(prevAction.getTimestamp(), history.created))
                 .timestamp(history.created)
                 .category(history.itemExist("category") ? history.getItemLastValue("category") : prevAction.getCategory())
                 .fixversions(history.itemExist("fixversions") ? history.getItemLastValue("fixversions") : prevAction.getFixversions())
@@ -119,8 +123,12 @@ public class ActionFactory {
     public Action comment(final Action prevAction, final Comment comment) {
         return ImmutableAction.builder()
                 .from(prevAction)
+                .action("comment")
                 .actor(comment.author == null ? User.INVALID_USER : comment.author)
+                .fieldschanged("comment")
                 .issueage(prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), comment.created))
+                .timeinstate(timeInState(prevAction, comment))
+                .timesinceaction(getTimeDiff(prevAction.getTimestamp(), comment.created))
                 .timestamp(comment.created)
                 .comments(prevAction.getComments()+1)
                 .statustimes(getStatusTime(prevAction.getStatustimes(), comment, prevAction))
@@ -130,31 +138,26 @@ public class ActionFactory {
     public Action toCurrent(final Action prevAction) {
         return ImmutableAction.builder()
                 .from(prevAction)
-                .issueage(prevAction.getIssueage() + addCurrentTimeDiff(prevAction))
-                .timestamp(JiraActionsUtil.parseDateTime(config.getStartDate()))
+                .issueage(prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), JiraActionsUtil.parseDateTime(config.getEndDate())))
+                .timestamp(JiraActionsUtil.parseDateTime(config.getEndDate()))
                 .statustimes(getStatusTime(prevAction.getStatustimes(), prevAction))
                 .build();
     }
 
-
-    private String dateResolved(final Action prevAction, final History history) {
-        String resolution = history.itemExist("resolution") ? history.getItemLastValue("resolution") : prevAction.getResolution();
-        if (!resolution.isEmpty() && prevAction.getResolution().isEmpty()){
-            return history.created.toDateTimeISO().toString();
-        }
-        return "";
+    private long timeInState(final Action prevAction, final Comment comment) {
+        return timeInState(prevAction, comment.created);
     }
 
-    private String dateClosed(final Action prevAction, final History history) {
-        String status = history.itemExist("status") ? history.getItemLastValue("status") : prevAction.getStatus();
-        if (status.equals("Closed")){
-            return history.created.toDateTimeISO().toString();
-        }
-        return "";
+    private long timeInState(final Action prevAction, final History history) {
+        return timeInState(prevAction, history.created);
     }
 
-    private long getTimeDiff(final DateTime before, final DateTime after) {
-        return (after.getMillis() - before.getMillis()) / 1000;
+    private long timeInState(final Action prevAction, final DateTime changeTimestamp) {
+        if(!Objects.equals(prevAction.getPrevstatus(), prevAction.getStatus())) {
+            return getTimeDiff(prevAction.getTimestamp(), changeTimestamp);
+        }
+
+        return getTimeDiff(prevAction.getTimestamp(), changeTimestamp) + prevAction.getTimeinstate();
     }
 
     private List<StatusTime> getStatusTime(List<StatusTime> list, final History history, final Action prevAction) {
@@ -187,12 +190,28 @@ public class ActionFactory {
 
     private List<StatusTime> getStatusTime(List<StatusTime> list, final Action prevAction) {
         List<StatusTime> st = new ArrayList<>(list);
-        st.set(st.size()-1, statusTimeFactory.updateStatus(st.get(st.size()-1), getTimeDiff(prevAction.getTimestamp(), JiraActionsUtil.parseDateTime(config.getStartDate()))));
+        st.set(st.size()-1, statusTimeFactory.updateStatus(st.get(st.size()-1), getTimeDiff(prevAction.getTimestamp(), JiraActionsUtil.parseDateTime(config.getEndDate()))));
         return st;
     }
 
-    private long addCurrentTimeDiff(Action prevAction) {
-        return getTimeDiff(prevAction.getTimestamp(), JiraActionsUtil.parseDateTime(config.getStartDate()));
+    private String dateResolved(final Action prevAction, final History history) {
+        String resolution = history.itemExist("resolution") ? history.getItemLastValue("resolution") : prevAction.getResolution();
+        if (!resolution.isEmpty() && prevAction.getResolution().isEmpty()){
+            return history.created.toDateTimeISO().toString();
+        }
+        return "";
+    }
+
+    private String dateClosed(final Action prevAction, final History history) {
+        String status = history.itemExist("status") ? history.getItemLastValue("status") : prevAction.getStatus();
+        if (status.equals("Closed")){
+            return history.created.toDateTimeISO().toString();
+        }
+        return "";
+    }
+
+    private long getTimeDiff(final DateTime before, final DateTime after) {
+        return (after.getMillis() - before.getMillis()) / 1000;
     }
 
 }

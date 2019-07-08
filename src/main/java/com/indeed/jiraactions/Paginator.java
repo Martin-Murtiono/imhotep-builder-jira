@@ -21,10 +21,12 @@ public class Paginator {
 
     private final PageProvider pageProvider;
     private final DateTime startDate;
+    private final DateTime endDate;
 
-    public Paginator(final PageProvider pageProvider, final DateTime startDate) {
+    public Paginator(final PageProvider pageProvider, final DateTime startDate, final DateTime endDate) {
         this.pageProvider = pageProvider;
         this.startDate = startDate;
+        this.endDate = endDate;
     }
 
     /*
@@ -51,8 +53,9 @@ public class Paginator {
      *    Then we should bail out and start at the beginning again to just pick up what's new during this pass.
      * 3) We find something we've already seen at the very beginning of our list. We're done.
      */
-    public void process() throws InterruptedException {
+    public void process(Boolean jiraissues) throws InterruptedException {
         final Map<String, DateTime> seenIssues = new HashMap<>();
+        final Map<String, DateTime> seenIssuesJiraissues = new HashMap<>();
         boolean reFoundTheBeginning = false;
         boolean firstIssue = true;
         boolean firstPass = true;
@@ -67,10 +70,16 @@ public class Paginator {
                 log.debug(String.join(", ", issues.stream().map(x -> x.key).collect(Collectors.toList())));
                 for(final Issue issue : issues) {
                     try {
-                        final List<Action> preFilteredActions = pageProvider.getActions(issue);
-                        final List<Action> actions = getActionsFilterByLastSeen(seenIssues, issue, preFilteredActions);
-                        final List<Action> filteredActions = actions.stream().filter(a -> a.isBefore(startDate)).collect(Collectors.toList());
-                        //log.debug(String.valueOf(filteredActions));
+                        List<Action> preFilteredActions = pageProvider.getActions(issue);
+                        List<Action> actions = getActionsFilterByLastSeen(seenIssues, issue, preFilteredActions);
+                        List<Action> filteredActions = actions.stream().filter(a -> a.isInRange(startDate, endDate)).collect(Collectors.toList());
+
+                        if(jiraissues) {
+                            if (!filteredActions.isEmpty()) {
+                                final Action action = pageProvider.getJiraissues(filteredActions.get(filteredActions.size()-1), issue);
+                                pageProvider.writeIssue(action);
+                            }
+                        }
                         pageProvider.writeActions(filteredActions);
 
 
@@ -113,7 +122,7 @@ public class Paginator {
      * could happen because there's an update that's not visible (for example, a restricted visibility comment) or
      * because an existing action was modified (for example, editing a comment).
      * We retrieve the list of issues from Jira in descending updatedDate order. A comment with an action we can't
-     * see could cause us to prematurely think we've finished processing all the new updates. To avoid this, we should
+     * see could cause us to prematuerly think we've finished processing all the new updates. To avoid this, we should
      * ignore things that have an updatedDate later than the last action.
      * not updates.
      *

@@ -2,6 +2,7 @@ package com.indeed.jiraactions;
 
 import com.indeed.jiraactions.api.customfields.CustomFieldDefinition;
 
+import com.indeed.jiraactions.api.statustimes.StatusTime;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpResponse;
@@ -13,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.joda.time.DateMidnight;
 import org.joda.time.DateTime;
+import org.joda.time.Days;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -29,13 +31,18 @@ public class TsvFileWriter {
 
     private final JiraActionsIndexBuilderConfig config;
     private final Map<DateMidnight, WriterData> writerDataMap;
+    private final Map<DateMidnight, WriterData> writerDataMapJiraissues;
     private final List<TSVColumnSpec> columnSpecs;
+    private final List<TSVColumnSpec> columnSpecsJiraissues;
 
     public TsvFileWriter(final JiraActionsIndexBuilderConfig config, final List<String> linkTypes, final List<String> statusTypes) {
         this.config = config;
-        final int days = 1;
+        final int days = Days.daysBetween(JiraActionsUtil.parseDateTime(config.getStartDate()),
+                JiraActionsUtil.parseDateTime(config.getEndDate())).getDays();
         writerDataMap = new HashMap<>(days);
-        this.columnSpecs = createColumnSpecs(linkTypes, statusTypes);
+        writerDataMapJiraissues = new HashMap<>(days);
+        this.columnSpecs = createColumnSpecs(linkTypes);
+        this.columnSpecsJiraissues = createColumnSpecsJiraissues(linkTypes, statusTypes);
     }
 
     private static final String FILENAME_DATE_TIME_PATTERN = "yyyyMMdd";
@@ -44,11 +51,50 @@ public class TsvFileWriter {
     }
 
     public void createFileAndWriteHeaders() throws IOException {
-        final DateTime date = JiraActionsUtil.parseDateTime(config.getStartDate());
-        createFileAndWriteHeaders(date);
+        final DateTime endDate = JiraActionsUtil.parseDateTime(config.getEndDate());
+        for(DateTime date = JiraActionsUtil.parseDateTime(config.getStartDate()); date.isBefore(endDate); date = date.plusDays(1)) {
+            createFileAndWriteHeaders(date);
+            createFileAndWriteHeadersJiraissues(date);
+        }
     }
 
-    private List<TSVColumnSpec> createColumnSpecs(final List<String> linkTypes, final List<String> statusTypes) {
+    private List<TSVColumnSpec> createColumnSpecs(final List<String> linkTypes) {
+        final TSVSpecBuilder specBuilder = new TSVSpecBuilder();
+        specBuilder
+                .addColumn("issuekey", Action::getIssuekey)
+                .addColumn("action", Action::getAction)
+                .addUserColumns("actor", Action::getActor)
+                .addUserColumns("assignee", Action::getAssignee)
+                .addColumn("category", Action::getCategory)
+                .addColumn("components*|", Action::getComponents)
+                .addColumn("createdate", Action::getCreatedDate)
+                .addColumn("duedate", Action::getDueDate)
+                .addTimeColumn("int duedate_time", Action::getDueDateTime)
+                .addColumn("fieldschanged*", Action::getFieldschanged)
+                .addColumn("fixversion*|", Action::getFixversions)
+                .addLongColumn("issueage", Action::getIssueage)
+                .addColumn("issuetype", Action::getIssuetype)
+                .addColumn("labels*", Action::getLabels)
+                .addColumn("priority", Action::getPriority)
+                .addColumn("project", Action::getProject)
+                .addColumn("projectkey", Action::getProjectkey)
+                .addColumn("prevstatus", Action::getPrevstatus)
+                .addUserColumns("reporter", Action::getReporter)
+                .addColumn("resolution", Action::getResolution)
+                .addColumn("status", Action::getStatus)
+                .addColumn("summary", Action::getSummary)
+                .addLongColumn("timeinstate", Action::getTimeinstate)
+                .addLongColumn("timesinceaction", Action::getTimesinceaction)
+                .addTimeColumn("time", Action::getTimestamp)
+                .addLinkColumns(linkTypes);
+
+        for (final CustomFieldDefinition customField : config.getCustomFields()) {
+            specBuilder.addCustomFieldColumns(customField);
+        }
+        return specBuilder.build();
+    }
+
+    private List<TSVColumnSpec> createColumnSpecsJiraissues(final List<String> linkTypes, final List<String> statusTypes) {
         final TSVSpecBuilder specBuilder = new TSVSpecBuilder();
         specBuilder
                 .addColumn("issuekey", Action::getIssuekey)
@@ -106,14 +152,32 @@ public class TsvFileWriter {
         writerDataMap.put(day.toDateMidnight(), new WriterData(file, bw));
     }
 
+    private void createFileAndWriteHeadersJiraissues(final DateTime day) throws IOException {
+        final String filename = "jiraissues_temp.tsv";
+        final File file = new File(filename);
+        //file.deleteOnExit();
+
+        final BufferedWriter bw = new BufferedWriter(new FileWriter(file));
+
+        final String headerLine = columnSpecsJiraissues.stream()
+                .map(TSVColumnSpec::getHeader)
+                .collect(Collectors.joining("\t"));
+
+        // Write header
+        bw.write(headerLine);
+        bw.newLine();
+        bw.flush();
+
+        writerDataMapJiraissues.put(day.toDateMidnight(), new WriterData(file, bw));
+    }
+
     public void writeActions(final List<Action> actions) throws IOException {
         if(actions.isEmpty()) {
             return;
         }
 
         for (final Action action : actions) {
-            DateTime day = JiraActionsUtil.parseDateTime(config.getStartDate());
-            final WriterData writerData = writerDataMap.get(day.toDateMidnight());
+            final WriterData writerData = writerDataMap.get(action.getTimestamp().toDateMidnight());
             final BufferedWriter bw = writerData.getBufferedWriter();
             writerData.setWritten();
             writerData.setDirty(true);
@@ -128,6 +192,36 @@ public class TsvFileWriter {
         }
 
         writerDataMap.values().stream()
+                .filter(WriterData::isDirty).forEach(x -> {
+            try {
+                x.getBufferedWriter().flush();
+                x.setDirty(false);
+            } catch (final IOException e) {
+                log.error("Failed to flush.", e);
+            }
+        });
+    }
+
+    public void writeIssue(final Action action) throws IOException {
+        if(action == null) {
+            return;
+        }
+
+        DateTime day = JiraActionsUtil.parseDateTime(config.getStartDate());
+        final WriterData writerData = writerDataMapJiraissues.get(day.toDateMidnight());
+        final BufferedWriter bw = writerData.getBufferedWriter();
+        writerData.setWritten();
+        writerData.setDirty(true);
+        final String line = columnSpecsJiraissues.stream()
+                .map(columnSpec -> columnSpec.getActionExtractor().apply(action))
+                .map(rawValue -> rawValue.replace("\t", "\\t"))
+                .map(rawValue -> rawValue.replace("\n", "\\n"))
+                .map(rawValue -> rawValue.replace("\r", "\\r"))
+                .collect(Collectors.joining("\t"));
+        bw.write(line);
+        bw.newLine();
+
+        writerDataMapJiraissues.values().stream()
                 .filter(WriterData::isDirty).forEach(x -> {
             try {
                 x.getBufferedWriter().flush();

@@ -54,16 +54,6 @@ public class TSVSpecBuilder {
         return this;
     }
 
-    public TSVSpecBuilder addCustomFieldColumns(final CustomFieldDefinition customField) {
-        final List<String> headers = customField.getHeaders();
-        final Function<Action, List<String>> valueExtractor = action -> getCustomFieldValue(customField, action);
-        for (int i = 0; i < headers.size(); i++) {
-            final int index = i;
-            addColumn(headers.get(index), action -> valueExtractor.apply(action).get(index));
-        }
-        return this;
-    }
-
     public TSVSpecBuilder addStatusTimeColumns(final List<String> statusTypes) {
         for(final String type : statusTypes) {
             final Function<Action, Long> totalStatusTime = action -> getTotalStatusTime(type, action);
@@ -83,6 +73,16 @@ public class TSVSpecBuilder {
         final Function<Action, String> valueExtractor = TSVSpecBuilder::getAllStatuses;
         addColumn("statushistory", valueExtractor);
 
+        return this;
+    }
+
+    public TSVSpecBuilder addCustomFieldColumns(final CustomFieldDefinition customField) {
+        final List<String> headers = customField.getHeaders();
+        final Function<Action, List<String>> valueExtractor = action -> getCustomFieldValue(customField, action);
+        for (int i = 0; i < headers.size(); i++) {
+            final int index = i;
+            addColumn(headers.get(index), action -> valueExtractor.apply(action).get(index));
+        }
         return this;
     }
 
@@ -115,6 +115,7 @@ public class TSVSpecBuilder {
 
     private static String getLinkValue(final String linkType, final Action action) {
         final Iterable<String> values = action.getLinks().stream()
+                .limit(500)
                 .filter(x -> x.getDescription().equals(linkType))
                 .map(Link::getTargetKey)::iterator;
 
@@ -138,6 +139,7 @@ public class TSVSpecBuilder {
         }
         return output;
     }
+
     private static long getTimeToFirst(final String statusType, final Action action) {
         final List<StatusTime> st = action.getStatustimes();
         long output = 0;
@@ -148,6 +150,7 @@ public class TSVSpecBuilder {
         }
         return output;
     }
+
     private static long getTimeToLast(final String statusType, final Action action) {
         final List<StatusTime> st = action.getStatustimes();
         long output = 0;
@@ -165,6 +168,4 @@ public class TSVSpecBuilder {
 
         return String.join(", ", values);
     }
-
-
 }

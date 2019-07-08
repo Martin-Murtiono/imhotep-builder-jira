@@ -4,8 +4,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.indeed.jiraactions.api.customfields.CustomFieldDefinition;
 import com.indeed.jiraactions.api.customfields.CustomFieldValue;
 import com.indeed.jiraactions.api.links.Link;
-import com.indeed.jiraactions.api.statustimes.StatusTime;
 import com.indeed.jiraactions.api.response.issue.User;
+import com.indeed.jiraactions.api.statustimes.StatusTime;
 import org.apache.commons.lang.StringUtils;
 import org.immutables.value.Value;
 import org.joda.time.DateTime;
@@ -17,19 +17,23 @@ import java.util.List;
 
 @Value.Immutable
 public interface Action {
-    String getIssuekey();
+    String getAction();
     User getActor();
     User getAssignee();
+    String getFieldschanged();
     long getIssueage();
+    String getIssuekey();
     String getIssuetype();
     String getProject();
     String getProjectkey();
+    String getPrevstatus();
     User getReporter();
     String getResolution();
     String getStatus();
     String getSummary();
+    long getTimeinstate();
+    long getTimesinceaction();
     DateTime getTimestamp();
-    List<StatusTime> getStatustimes();
     String getCategory();
     String getFixversions();
     String getDueDate();
@@ -40,6 +44,7 @@ public interface Action {
     int getComments();
     String getDateResolved();
     String getDateClosed();
+    List<StatusTime> getStatustimes();
     Map<CustomFieldDefinition, CustomFieldValue> getCustomFieldValues();
     Set<Link> getLinks();
 
@@ -56,9 +61,5 @@ public interface Action {
     @Value.Derived
     default boolean isInRange(final DateTime start, final DateTime end) {
         return start.compareTo(getTimestamp()) <= 0 && end.compareTo(getTimestamp()) > 0;
-    }
-    @Value.Derived
-    default boolean isBefore(final DateTime date) {
-        return date.compareTo(getTimestamp()) >= 0;
     }
 }

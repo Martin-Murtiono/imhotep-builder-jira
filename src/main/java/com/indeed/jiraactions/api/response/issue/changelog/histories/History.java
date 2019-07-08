@@ -111,8 +111,4 @@ public class History {
 
         return item.to;
     }
-
-    public boolean isBefore(final DateTime date) {
-        return date.compareTo(created) >= 0;
-    }
 }
