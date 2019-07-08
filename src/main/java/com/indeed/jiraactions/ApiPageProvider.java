@@ -131,9 +131,30 @@ public class ApiPageProvider implements PageProvider {
     }
 
     @Override
+    public Action getJiraissues(final Action action, final Issue issue) throws IOException {
+        final Stopwatch stopwatch = Stopwatch.createStarted();
+        final ActionsBuilder actionsBuilder = new ActionsBuilder(actionFactory, issue, startDate, endDate);
+        final Action updatedAction = actionsBuilder.buildJiraIssues(action);
+        stopwatch.stop();
+
+        processTime += stopwatch.elapsed(TimeUnit.MILLISECONDS);
+
+        return updatedAction;
+    }
+
+    @Override
     public void writeActions(final List<Action> actions) throws IOException {
         final Stopwatch stopwatch = Stopwatch.createStarted();
         tsvFileWriter.writeActions(actions);
+        stopwatch.stop();
+
+        fileTime += stopwatch.elapsed(TimeUnit.MILLISECONDS);
+    }
+
+    @Override
+    public void writeIssue(final Action action) throws IOException {
+        final Stopwatch stopwatch = Stopwatch.createStarted();
+        tsvFileWriter.writeIssue(action);
         stopwatch.stop();
 
         fileTime += stopwatch.elapsed(TimeUnit.MILLISECONDS);

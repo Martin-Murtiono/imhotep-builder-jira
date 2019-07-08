@@ -9,6 +9,9 @@ import com.indeed.jiraactions.api.IssuesAPICaller;
 import com.indeed.jiraactions.api.customfields.CustomFieldApiParser;
 import com.indeed.jiraactions.api.customfields.CustomFieldDefinition;
 import com.indeed.jiraactions.api.links.LinkTypesApiCaller;
+import com.indeed.jiraactions.api.statustimes.StatusTypesApiCaller;
+import com.indeed.jiraactions.jiraissues.JiraIssuesIndexBuilder;
+import javafx.scene.paint.Stop;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.joda.time.DateTime;
@@ -57,8 +60,10 @@ public class JiraActionsIndexBuilder {
 
             final LinkTypesApiCaller linkTypesApiCaller = new LinkTypesApiCaller(config, apiCaller);
             final List<String> linkTypes = linkTypesApiCaller.getLinkTypes();
+            final StatusTypesApiCaller statusTypesApiCaller = new StatusTypesApiCaller(config, apiCaller);
+            final List<String> statusTypes = statusTypesApiCaller.getStatusTypes();
 
-            final TsvFileWriter writer = new TsvFileWriter(config, linkTypes);
+            final TsvFileWriter writer = new TsvFileWriter(config, linkTypes, statusTypes);
             final Stopwatch headerStopwatch = Stopwatch.createStarted();
             writer.createFileAndWriteHeaders();
             headerStopwatch.stop();
@@ -67,10 +72,11 @@ public class JiraActionsIndexBuilder {
             final ApiPageProvider apiPageProvider = new ApiPageProvider(issuesAPICaller, actionFactory, config, writer);
             final Paginator paginator = new Paginator(apiPageProvider, startDate, endDate);
 
-            paginator.process();
+            paginator.process(config.getJiraissues());
             fileTime += apiPageProvider.getFileWritingTime();
             final long apiTime = apiPageProvider.getApiTime();
             final long processTime = apiPageProvider.getProcessingTime();
+
 
             log.debug("Had to look up {} users.", userLookupService.numLookups());
 
@@ -85,6 +91,16 @@ public class JiraActionsIndexBuilder {
 
             log.debug("No values seen for these custom fields: " + missedFields);
 
+            final Stopwatch jiraIssuesStopwatch = Stopwatch.createStarted();
+            if(config.getJiraissues()) {
+                final JiraIssuesIndexBuilder jiraIssuesIndexBuilder = new JiraIssuesIndexBuilder(config);
+                jiraIssuesIndexBuilder.run();
+                log.info("{} ms to build jiraissues.", jiraIssuesStopwatch.elapsed(TimeUnit.MILLISECONDS));
+            } else {
+                log.info("Not building jiraissues.");
+            }
+            jiraIssuesStopwatch.stop();
+
             final Stopwatch fileUploadStopwatch = Stopwatch.createStarted();
             writer.uploadTsvFile();
             fileUploadStopwatch.stop();
@@ -95,8 +111,8 @@ public class JiraActionsIndexBuilder {
             final long apiUserTime = userLookupService.getUserLookupTotalTime();
 
             log.info("{} ms for the whole process.", stopwatch.elapsed(TimeUnit.MILLISECONDS));
-            log.info("apiTime: {}ms, processTime: {}ms, fileTime: {}ms, userLookupTime: {}ms",
-                    apiTime-apiUserTime, processTime, fileTime, apiUserTime);
+            log.info("apiTime: {}ms, processTime: {}ms, fileTime: {}ms, userLookupTime: {}ms, jiraIssuesBuildTime: {}ms",
+                    apiTime-apiUserTime, processTime, fileTime, apiUserTime, jiraIssuesStopwatch.elapsed(TimeUnit.MILLISECONDS));
         } catch (final Exception e) {
             log.error("Threw an exception trying to run the index builder", e);
             throw e;

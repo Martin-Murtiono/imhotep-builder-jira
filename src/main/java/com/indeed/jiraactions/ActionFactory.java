@@ -7,10 +7,14 @@ import com.indeed.jiraactions.api.response.issue.Issue;
 import com.indeed.jiraactions.api.response.issue.User;
 import com.indeed.jiraactions.api.response.issue.changelog.histories.History;
 import com.indeed.jiraactions.api.response.issue.fields.comment.Comment;
+import com.indeed.jiraactions.api.statustimes.StatusTime;
+import com.indeed.jiraactions.api.statustimes.StatusTimeFactory;
 import org.joda.time.DateTime;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 public class ActionFactory {
@@ -19,6 +23,7 @@ public class ActionFactory {
     private final CustomFieldApiParser customFieldParser;
     private final JiraActionsIndexBuilderConfig config;
     private final LinkFactory linkFactory = new LinkFactory();
+    private final StatusTimeFactory statusTimeFactory = new StatusTimeFactory();
 
     @SuppressWarnings("WeakerAccess")
     public ActionFactory(final UserLookupService userLookupService,
@@ -57,6 +62,10 @@ public class ActionFactory {
                 .components(issue.initialValue("components"))
                 .labels(issue.initialValue("labels"))
                 .createdDate(issue.fields.created.toString("yyyy-MM-dd"))
+                .comments(0)
+                .dateResolved("")
+                .dateClosed("")
+                .statustimes(statusTimeFactory.firstStatusTime(issue.initialValue("status")))
                 .links(Collections.emptySet());
 
             for(final CustomFieldDefinition customFieldDefinition : config.getCustomFields()) {
@@ -98,6 +107,10 @@ public class ActionFactory {
                 .components(history.itemExist("components") ? history.getItemLastValue("components") : prevAction.getComponents())
                 .labels(history.itemExist("labels") ? history.getItemLastValue("labels") : prevAction.getLabels())
                 .createdDate(prevAction.getCreatedDate())
+                .dateResolved(dateResolved(prevAction, history))
+                .dateClosed(dateClosed(prevAction, history))
+                .comments(prevAction.getComments())
+                .statustimes(getStatusTime(prevAction.getStatustimes(), history, prevAction))
                 .links(linkFactory.mergeLinks(prevAction.getLinks(), history.getAllItems("link")));
 
         for(final CustomFieldDefinition customFieldDefinition : config.getCustomFields()) {
@@ -117,6 +130,17 @@ public class ActionFactory {
                 .timeinstate(timeInState(prevAction, comment))
                 .timesinceaction(getTimeDiff(prevAction.getTimestamp(), comment.created))
                 .timestamp(comment.created)
+                .comments(prevAction.getComments()+1)
+                .statustimes(getStatusTime(prevAction.getStatustimes(), comment, prevAction))
+                .build();
+    }
+
+    public Action toCurrent(final Action prevAction) {
+        return ImmutableAction.builder()
+                .from(prevAction)
+                .issueage(prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), JiraActionsUtil.parseDateTime(config.getEndDate())))
+                .timestamp(JiraActionsUtil.parseDateTime(config.getEndDate()))
+                .statustimes(getStatusTime(prevAction.getStatustimes(), prevAction))
                 .build();
     }
 
@@ -134,6 +158,56 @@ public class ActionFactory {
         }
 
         return getTimeDiff(prevAction.getTimestamp(), changeTimestamp) + prevAction.getTimeinstate();
+    }
+
+    private List<StatusTime> getStatusTime(List<StatusTime> list, final History history, final Action prevAction) {
+        final List<StatusTime> st = new ArrayList<>(list);
+        String status = history.itemExist("status") ? history.getItemLastValue("status") : prevAction.getStatus();
+        st.set(st.size()-1, statusTimeFactory.updateStatus(st.get(st.size()-1), getTimeDiff(prevAction.getTimestamp(), history.created)));
+        if (!status.equals(prevAction.getStatus())) {
+            boolean first = true;
+            for(int i = 0; i < st.size(); i++) {
+                if (st.get(i).getStatus().equals(status)) {
+                    st.set(i, statusTimeFactory.updateTimeToLast(st.get(i)));
+                    first = false;
+                }
+            }
+            if (first) {
+                st.add(statusTimeFactory.addStatus(status, prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), history.created), prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), history.created)));
+            } else {
+                st.add(statusTimeFactory.addStatus(status, 0, prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), history.created)));
+            }
+
+        }
+        return st;
+    }
+
+    private List<StatusTime> getStatusTime(List<StatusTime> list, final Comment comment, final Action prevAction) {
+        List<StatusTime> st = new ArrayList<>(list);
+        st.set(st.size()-1, statusTimeFactory.updateStatus(st.get(st.size()-1), getTimeDiff(prevAction.getTimestamp(), comment.created)));
+        return st;
+    }
+
+    private List<StatusTime> getStatusTime(List<StatusTime> list, final Action prevAction) {
+        List<StatusTime> st = new ArrayList<>(list);
+        st.set(st.size()-1, statusTimeFactory.updateStatus(st.get(st.size()-1), getTimeDiff(prevAction.getTimestamp(), JiraActionsUtil.parseDateTime(config.getEndDate()))));
+        return st;
+    }
+
+    private String dateResolved(final Action prevAction, final History history) {
+        String resolution = history.itemExist("resolution") ? history.getItemLastValue("resolution") : prevAction.getResolution();
+        if (!resolution.isEmpty() && prevAction.getResolution().isEmpty()){
+            return history.created.toDateTimeISO().toString();
+        }
+        return "";
+    }
+
+    private String dateClosed(final Action prevAction, final History history) {
+        String status = history.itemExist("status") ? history.getItemLastValue("status") : prevAction.getStatus();
+        if (status.equals("Closed")){
+            return history.created.toDateTimeISO().toString();
+        }
+        return "";
     }
 
     private long getTimeDiff(final DateTime before, final DateTime after) {

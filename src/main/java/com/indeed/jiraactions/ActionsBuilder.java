@@ -11,6 +11,7 @@ import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class ActionsBuilder {
     private static final Logger LOG = LoggerFactory.getLogger(ActionsBuilder.class);
@@ -36,6 +37,11 @@ public class ActionsBuilder {
         setUpdateActions();
         setCommentActions();
         return actions;
+    }
+
+    @Nonnull
+    public Action buildJiraIssues(Action action) throws IOException {
+        return setUpdateToCurrent(action);
     }
 
     //
@@ -95,6 +101,10 @@ public class ActionsBuilder {
                 }
             }
         }
+    }
+
+    private Action setUpdateToCurrent(Action prevAction) {
+        return actionFactory.toCurrent(prevAction);
     }
 
     private boolean isCreatedDuringRange(final DateTime createdDate) {

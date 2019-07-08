@@ -115,7 +115,7 @@ public class TestPaginator {
         mw.replayAll();
 
         final Paginator paginator = new Paginator(provider, start, end);
-        paginator.process();
+        paginator.process(false);
 
         mw.verifyAll();
     }
@@ -193,7 +193,7 @@ public class TestPaginator {
         mw.replayAll();
 
         final Paginator paginator = new Paginator(provider, start, end);
-        paginator.process();
+        paginator.process(false);
 
         mw.verifyAll();
     }
@@ -341,7 +341,7 @@ public class TestPaginator {
 
         mw.replayAll();
         final Paginator paginator = new Paginator(provider, start, end);
-        paginator.process();
+        paginator.process(false);
         mw.verifyAll();
     }
 
@@ -449,7 +449,7 @@ public class TestPaginator {
 
         mw.replayAll();
         final Paginator paginator = new Paginator(provider, start, end);
-        paginator.process();
+        paginator.process(false);
         mw.verifyAll();
     }
 
