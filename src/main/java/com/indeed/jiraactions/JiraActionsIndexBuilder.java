@@ -110,9 +110,16 @@ public class JiraActionsIndexBuilder {
 
             final long apiUserTime = userLookupService.getUserLookupTotalTime();
 
+            log.info("{} ms to build Jiraactions.", stopwatch.elapsed(TimeUnit.MILLISECONDS)-jiraIssuesStopwatch.elapsed(TimeUnit.MILLISECONDS));
+            log.info("Jiraactions:{apiTime: {} ms, processTime: {} ms, fileTime: {} ms, userLookupTime: {} ms}",
+                    apiTime-apiUserTime, processTime, fileTime, apiUserTime);
+            if(config.getJiraissues()) {
+                final JiraIssuesIndexBuilder jiraIssuesIndexBuilder = new JiraIssuesIndexBuilder(config);
+                log.info("{} ms to build Jiraissues.", jiraIssuesStopwatch.elapsed(TimeUnit.MILLISECONDS));
+                log.info("Jiraissues:{downloadTime: {} ms, processTime: {} ms, uploadTime: {} ms",
+                        jiraIssuesIndexBuilder.getDownloadTime(), jiraIssuesIndexBuilder.getProcessTime(), jiraIssuesIndexBuilder.getUploadTime());
+            }
             log.info("{} ms for the whole process.", stopwatch.elapsed(TimeUnit.MILLISECONDS));
-            log.info("apiTime: {}ms, processTime: {}ms, fileTime: {}ms, userLookupTime: {}ms, jiraIssuesBuildTime: {}ms",
-                    apiTime-apiUserTime, processTime, fileTime, apiUserTime, jiraIssuesStopwatch.elapsed(TimeUnit.MILLISECONDS));
         } catch (final Exception e) {
             log.error("Threw an exception trying to run the index builder", e);
             throw e;

@@ -155,7 +155,7 @@ public class TsvFileWriter {
     private void createFileAndWriteHeadersJiraissues(final DateTime day) throws IOException {
         final String filename = "jiraissues_temp.tsv";
         final File file = new File(filename);
-        //file.deleteOnExit();
+        file.deleteOnExit();
 
         final BufferedWriter bw = new BufferedWriter(new FileWriter(file));
 

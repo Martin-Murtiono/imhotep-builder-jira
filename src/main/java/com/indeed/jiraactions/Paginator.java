@@ -55,7 +55,6 @@ public class Paginator {
      */
     public void process(Boolean jiraissues) throws InterruptedException {
         final Map<String, DateTime> seenIssues = new HashMap<>();
-        final Map<String, DateTime> seenIssuesJiraissues = new HashMap<>();
         boolean reFoundTheBeginning = false;
         boolean firstIssue = true;
         boolean firstPass = true;
@@ -70,15 +69,13 @@ public class Paginator {
                 log.debug(String.join(", ", issues.stream().map(x -> x.key).collect(Collectors.toList())));
                 for(final Issue issue : issues) {
                     try {
-                        List<Action> preFilteredActions = pageProvider.getActions(issue);
-                        List<Action> actions = getActionsFilterByLastSeen(seenIssues, issue, preFilteredActions);
-                        List<Action> filteredActions = actions.stream().filter(a -> a.isInRange(startDate, endDate)).collect(Collectors.toList());
+                        final List<Action> preFilteredActions = pageProvider.getActions(issue);
+                        final List<Action> actions = getActionsFilterByLastSeen(seenIssues, issue, preFilteredActions);
+                        final List<Action> filteredActions = actions.stream().filter(a -> a.isInRange(startDate, endDate)).collect(Collectors.toList());
 
-                        if(jiraissues) {
-                            if (!filteredActions.isEmpty()) {
-                                final Action action = pageProvider.getJiraissues(filteredActions.get(filteredActions.size()-1), issue);
-                                pageProvider.writeIssue(action);
-                            }
+                        if(jiraissues && !filteredActions.isEmpty()) {
+                            final Action action = pageProvider.getJiraissues(filteredActions.get(filteredActions.size()-1), issue);
+                            pageProvider.writeIssue(action);
                         }
                         pageProvider.writeActions(filteredActions);
 

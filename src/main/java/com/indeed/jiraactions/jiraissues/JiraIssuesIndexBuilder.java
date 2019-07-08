@@ -13,6 +13,9 @@ public class JiraIssuesIndexBuilder {
     private static final Logger log = LoggerFactory.getLogger(JiraIssuesIndexBuilder.class);
 
     private final JiraActionsIndexBuilderConfig config;
+    private long downloadTime = 0;
+    private long processTime = 0;
+    private long uploadTime = 0;
 
     public JiraIssuesIndexBuilder(JiraActionsIndexBuilderConfig config) {
         this.config = config;
@@ -26,27 +29,42 @@ public class JiraIssuesIndexBuilder {
             log.info("Downloading previous day's TSV.");
             fileWriter.downloadTsv(JiraActionsUtil.parseDateTime(config.getStartDate()));
             log.debug("Took {} ms to download previous day's TSV.", stopwatch.elapsed(TimeUnit.MILLISECONDS));
+            downloadTime = stopwatch.elapsed(TimeUnit.MILLISECONDS);
 
             fileWriter.parseNewTsv();
 
             fileWriter.createTsv(JiraActionsUtil.parseDateTime(config.getStartDate()));
             log.info("Jiraissues file successfully created.");
 
-            final Stopwatch processTime = Stopwatch.createStarted();
+            final Stopwatch processStopwatch = Stopwatch.createStarted();
             log.debug("Updating TSV file.");
             fileWriter.process();
-            log.debug("{} ms to update TSV.", processTime.elapsed(TimeUnit.MILLISECONDS));
-            processTime.stop();
+            log.debug("{} ms to update TSV.", processStopwatch.elapsed(TimeUnit.MILLISECONDS));
+            processTime = processStopwatch.elapsed(TimeUnit.MILLISECONDS);
+            processStopwatch.stop();
 
-            final Stopwatch uploadTime = Stopwatch.createStarted();
+            final Stopwatch uploadStopwatch = Stopwatch.createStarted();
             fileWriter.uploadTsv();
-            log.debug("{} ms to upload TSV.", uploadTime.elapsed(TimeUnit.MILLISECONDS));
-            uploadTime.stop();
+            log.debug("{} ms to upload TSV.", uploadStopwatch.elapsed(TimeUnit.MILLISECONDS));
+            uploadTime = uploadStopwatch.elapsed(TimeUnit.MILLISECONDS);
+            uploadStopwatch.stop();
 
             log.debug("{} ms to build jiraissues", stopwatch.elapsed(TimeUnit.MILLISECONDS));
         } catch (final Exception e) {
             log.error("Threw an exception trying to run the index builder", e);
             throw e;
         }
+    }
+
+    public long getDownloadTime() {
+        return downloadTime;
+    }
+
+    public long getProcessTime() {
+        return processTime;
+    }
+
+    public long getUploadTime() {
+        return uploadTime;
     }
 }

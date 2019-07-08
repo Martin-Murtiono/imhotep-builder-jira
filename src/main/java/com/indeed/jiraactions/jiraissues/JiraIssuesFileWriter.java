@@ -17,7 +17,6 @@ import javax.net.ssl.HttpsURLConnection;
 import java.io.BufferedInputStream;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -58,9 +57,9 @@ public class JiraIssuesFileWriter {
         final String userPass = config.getIuploadUsername() + ":" + config.getIuploadPassword();
         final String basicAuth = "Basic " + new String(new Base64().encode(userPass.getBytes()));
 
-        File file = new File("jiraissues_downloaded.tsv");
+        final File file = new File("jiraissues_downloaded.tsv");
         file.deleteOnExit();
-        FileOutputStream stream = new FileOutputStream(file);
+        final FileOutputStream stream = new FileOutputStream(file);
 
         for(int i = 0; i <= NUM_RETRIES; i++) {
             try {
@@ -73,10 +72,11 @@ public class JiraIssuesFileWriter {
 
                 final BufferedInputStream in = new BufferedInputStream(connection.getInputStream());
                 int length;
-                byte[] buffer = new byte[1024];
+                final byte[] buffer = new byte[1024];
                 while ((length = in.read(buffer)) > -1) {
                     stream.write(buffer, 0, length);
                 }
+                log.info("Successfully downloaded file.");
                 stream.close();
                 in.close();
                 break;
@@ -135,12 +135,12 @@ public class JiraIssuesFileWriter {
     }
 
     public void process() throws Exception {
-        File file = new File("jiraissues_downloaded.tsv");
-        FileReader reader = new FileReader(file);
-        TsvParser parser = new TsvParser(settings);
+        final File file = new File("jiraissues_downloaded.tsv");
+        final FileReader reader = new FileReader(file);
+        final TsvParser parser = new TsvParser(settings);
 
         parser.beginParsing(reader);
-        String[] a = parser.parseNext(); // skip headers
+        parser.parseNext(); // skip headers
 
 
         /** If the issue is updated through jiraactions it will replace it because that version is the latest.
@@ -182,7 +182,7 @@ public class JiraIssuesFileWriter {
     }
 
     public void createTsv(DateTime date) throws IOException {
-        String formattedDate = date.toString("yyyyMMdd");
+        final String formattedDate = date.toString("yyyyMMdd");
         final File file = new File("jiraissues_" + formattedDate + ".tsv");
         final BufferedWriter bw = new BufferedWriter(new FileWriter(file));
         final String headerLine = String.join("\t", headers);
@@ -226,10 +226,8 @@ public class JiraIssuesFileWriter {
                         .replace("&", "and")
                         .replace("/", "_");
             }
-            if(headers[i].contains(status) && !status.isEmpty()){
-                if(headers[i].startsWith("totaltime")) {
-                    issue[i] = String.valueOf(Long.parseLong(issue[i]) + DAY);
-                }
+            if(headers[i].contains(status) && !status.isEmpty() && headers[i].startsWith("totaltime")){
+                issue[i] = String.valueOf(Long.parseLong(issue[i]) + DAY);
             }
         }
         return issue;
