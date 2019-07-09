@@ -184,6 +184,7 @@ public class JiraIssuesFileWriter {
     public void createTsv(DateTime date) throws IOException {
         final String formattedDate = date.toString("yyyyMMdd");
         final File file = new File("jiraissues_" + formattedDate + ".tsv");
+        file.deleteOnExit();
         final BufferedWriter bw = new BufferedWriter(new FileWriter(file));
         final String headerLine = String.join("\t", headers);
         bw.write(headerLine);
@@ -201,12 +202,13 @@ public class JiraIssuesFileWriter {
                 .collect(Collectors.joining("\t"));
         final BufferedWriter bw = writerData.getBufferedWriter();
         writerData.setWritten();
-        bw.write(line);
-        bw.newLine();
-        bw.flush();
         try {
+            bw.write(line);
+            bw.newLine();
+            bw.flush();
             writerData.getBufferedWriter().flush();
         } catch (final IOException e) {
+            log.error("Unable to write new line.", e);
         }
     }
 

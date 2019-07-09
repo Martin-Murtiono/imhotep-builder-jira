@@ -24,12 +24,12 @@ public class JiraIssuesIndexBuilder {
     public void run() throws Exception {
         final JiraIssuesFileWriter fileWriter = new JiraIssuesFileWriter(config);
         try {
-            final Stopwatch stopwatch = Stopwatch.createStarted();
 
+            final Stopwatch downloadStopwatch = Stopwatch.createStarted();
             log.info("Downloading previous day's TSV.");
             fileWriter.downloadTsv(JiraActionsUtil.parseDateTime(config.getStartDate()));
-            log.debug("Took {} ms to download previous day's TSV.", stopwatch.elapsed(TimeUnit.MILLISECONDS));
-            downloadTime = stopwatch.elapsed(TimeUnit.MILLISECONDS);
+            log.debug("Took {} ms to download previous day's TSV.", downloadStopwatch.elapsed(TimeUnit.MILLISECONDS));
+            this.downloadTime = downloadStopwatch.elapsed(TimeUnit.MILLISECONDS);
 
             fileWriter.parseNewTsv();
 
@@ -40,16 +40,15 @@ public class JiraIssuesIndexBuilder {
             log.debug("Updating TSV file.");
             fileWriter.process();
             log.debug("{} ms to update TSV.", processStopwatch.elapsed(TimeUnit.MILLISECONDS));
-            processTime = processStopwatch.elapsed(TimeUnit.MILLISECONDS);
+            this.processTime = processStopwatch.elapsed(TimeUnit.MILLISECONDS);
             processStopwatch.stop();
 
             final Stopwatch uploadStopwatch = Stopwatch.createStarted();
             fileWriter.uploadTsv();
             log.debug("{} ms to upload TSV.", uploadStopwatch.elapsed(TimeUnit.MILLISECONDS));
-            uploadTime = uploadStopwatch.elapsed(TimeUnit.MILLISECONDS);
+            this.uploadTime = uploadStopwatch.elapsed(TimeUnit.MILLISECONDS);
             uploadStopwatch.stop();
 
-            log.debug("{} ms to build jiraissues", stopwatch.elapsed(TimeUnit.MILLISECONDS));
         } catch (final Exception e) {
             log.error("Threw an exception trying to run the index builder", e);
             throw e;
@@ -57,14 +56,14 @@ public class JiraIssuesIndexBuilder {
     }
 
     public long getDownloadTime() {
-        return downloadTime;
+        return this.downloadTime;
     }
 
     public long getProcessTime() {
-        return processTime;
+        return this.processTime;
     }
 
     public long getUploadTime() {
-        return uploadTime;
+        return this.uploadTime;
     }
 }

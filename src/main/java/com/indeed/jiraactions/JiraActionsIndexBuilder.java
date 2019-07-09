@@ -92,10 +92,10 @@ public class JiraActionsIndexBuilder {
             log.debug("No values seen for these custom fields: " + missedFields);
 
             final Stopwatch jiraIssuesStopwatch = Stopwatch.createStarted();
+            final JiraIssuesIndexBuilder jiraIssuesIndexBuilder = new JiraIssuesIndexBuilder(config);
             if(config.getJiraissues()) {
-                final JiraIssuesIndexBuilder jiraIssuesIndexBuilder = new JiraIssuesIndexBuilder(config);
+                log.info("Building jiraissues.");
                 jiraIssuesIndexBuilder.run();
-                log.info("{} ms to build jiraissues.", jiraIssuesStopwatch.elapsed(TimeUnit.MILLISECONDS));
             } else {
                 log.info("Not building jiraissues.");
             }
@@ -114,9 +114,8 @@ public class JiraActionsIndexBuilder {
             log.info("Jiraactions:{apiTime: {} ms, processTime: {} ms, fileTime: {} ms, userLookupTime: {} ms}",
                     apiTime-apiUserTime, processTime, fileTime, apiUserTime);
             if(config.getJiraissues()) {
-                final JiraIssuesIndexBuilder jiraIssuesIndexBuilder = new JiraIssuesIndexBuilder(config);
                 log.info("{} ms to build Jiraissues.", jiraIssuesStopwatch.elapsed(TimeUnit.MILLISECONDS));
-                log.info("Jiraissues:{downloadTime: {} ms, processTime: {} ms, uploadTime: {} ms",
+                log.info("Jiraissues:{downloadTime: {} ms, processTime: {} ms, uploadTime: {} ms}",
                         jiraIssuesIndexBuilder.getDownloadTime(), jiraIssuesIndexBuilder.getProcessTime(), jiraIssuesIndexBuilder.getUploadTime());
             }
             log.info("{} ms for the whole process.", stopwatch.elapsed(TimeUnit.MILLISECONDS));
