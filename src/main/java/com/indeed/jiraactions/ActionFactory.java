@@ -7,14 +7,11 @@ import com.indeed.jiraactions.api.response.issue.Issue;
 import com.indeed.jiraactions.api.response.issue.User;
 import com.indeed.jiraactions.api.response.issue.changelog.histories.History;
 import com.indeed.jiraactions.api.response.issue.fields.comment.Comment;
-import com.indeed.jiraactions.api.statustimes.StatusTime;
 import com.indeed.jiraactions.api.statustimes.StatusTimeFactory;
 import org.joda.time.DateTime;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Objects;
 
 public class ActionFactory {
@@ -110,8 +107,8 @@ public class ActionFactory {
                 .dateResolved(dateResolved(prevAction, history))
                 .dateClosed(dateClosed(prevAction, history))
                 .comments(prevAction.getComments())
-                .statustimes(getStatusTime(prevAction.getStatustimes(), history, prevAction))
-                .links(linkFactory.mergeLinks(prevAction.getLinks(), history.getAllItems("link")));
+                .links(linkFactory.mergeLinks(prevAction.getLinks(), history.getAllItems("link")))
+                .statustimes(statusTimeFactory.getStatusTimeUpdate(prevAction.getStatustimes(), history, prevAction));
 
         for(final CustomFieldDefinition customFieldDefinition : config.getCustomFields()) {
             builder.putCustomFieldValues(customFieldDefinition, customFieldParser.parseNonInitialValue(customFieldDefinition, prevAction, history));
@@ -131,7 +128,7 @@ public class ActionFactory {
                 .timesinceaction(getTimeDiff(prevAction.getTimestamp(), comment.created))
                 .timestamp(comment.created)
                 .comments(prevAction.getComments()+1)
-                .statustimes(getStatusTime(prevAction.getStatustimes(), comment, prevAction))
+                .statustimes(statusTimeFactory.getStatusTimeComment(prevAction.getStatustimes(), comment, prevAction))
                 .build();
     }
 
@@ -140,7 +137,7 @@ public class ActionFactory {
                 .from(prevAction)
                 .issueage(prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), JiraActionsUtil.parseDateTime(config.getEndDate())))
                 .timestamp(JiraActionsUtil.parseDateTime(config.getEndDate()))
-                .statustimes(getStatusTime(prevAction.getStatustimes(), prevAction))
+                .statustimes(statusTimeFactory.getStatusTimeCurrent(prevAction.getStatustimes(), prevAction, JiraActionsUtil.parseDateTime(config.getEndDate())))
                 .build();
     }
 
@@ -158,40 +155,6 @@ public class ActionFactory {
         }
 
         return getTimeDiff(prevAction.getTimestamp(), changeTimestamp) + prevAction.getTimeinstate();
-    }
-
-    private List<StatusTime> getStatusTime(List<StatusTime> list, final History history, final Action prevAction) {
-        final List<StatusTime> st = new ArrayList<>(list);
-        String status = history.itemExist("status") ? history.getItemLastValue("status") : prevAction.getStatus();
-        st.set(st.size()-1, statusTimeFactory.updateStatus(st.get(st.size()-1), getTimeDiff(prevAction.getTimestamp(), history.created)));
-        if (!status.equals(prevAction.getStatus())) {
-            boolean first = true;
-            for(int i = 0; i < st.size(); i++) {
-                if (st.get(i).getStatus().equals(status)) {
-                    st.set(i, statusTimeFactory.updateTimeToLast(st.get(i)));
-                    first = false;
-                }
-            }
-            if (first) {
-                st.add(statusTimeFactory.addStatus(status, prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), history.created), prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), history.created)));
-            } else {
-                st.add(statusTimeFactory.addStatus(status, 0, prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), history.created)));
-            }
-
-        }
-        return st;
-    }
-
-    private List<StatusTime> getStatusTime(List<StatusTime> list, final Comment comment, final Action prevAction) {
-        List<StatusTime> st = new ArrayList<>(list);
-        st.set(st.size()-1, statusTimeFactory.updateStatus(st.get(st.size()-1), getTimeDiff(prevAction.getTimestamp(), comment.created)));
-        return st;
-    }
-
-    private List<StatusTime> getStatusTime(List<StatusTime> list, final Action prevAction) {
-        List<StatusTime> st = new ArrayList<>(list);
-        st.set(st.size()-1, statusTimeFactory.updateStatus(st.get(st.size()-1), getTimeDiff(prevAction.getTimestamp(), JiraActionsUtil.parseDateTime(config.getEndDate()))));
-        return st;
     }
 
     private String dateResolved(final Action prevAction, final History history) {

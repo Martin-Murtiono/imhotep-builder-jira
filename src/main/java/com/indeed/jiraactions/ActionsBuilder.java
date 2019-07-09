@@ -11,7 +11,6 @@ import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class ActionsBuilder {
     private static final Logger LOG = LoggerFactory.getLogger(ActionsBuilder.class);
