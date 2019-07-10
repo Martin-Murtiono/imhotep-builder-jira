@@ -22,11 +22,13 @@ public class Paginator {
     private final PageProvider pageProvider;
     private final DateTime startDate;
     private final DateTime endDate;
+    private final boolean jiraIssues;
 
-    public Paginator(final PageProvider pageProvider, final DateTime startDate, final DateTime endDate) {
+    public Paginator(final PageProvider pageProvider, final DateTime startDate, final DateTime endDate, final boolean jiraIssues) {
         this.pageProvider = pageProvider;
         this.startDate = startDate;
         this.endDate = endDate;
+        this.jiraIssues = jiraIssues;
     }
 
     /*
@@ -53,7 +55,7 @@ public class Paginator {
      *    Then we should bail out and start at the beginning again to just pick up what's new during this pass.
      * 3) We find something we've already seen at the very beginning of our list. We're done.
      */
-    public void process(Boolean jiraissues) throws InterruptedException {
+    public void process() throws InterruptedException {
         final Map<String, DateTime> seenIssues = new HashMap<>();
         boolean reFoundTheBeginning = false;
         boolean firstIssue = true;
@@ -73,7 +75,7 @@ public class Paginator {
                         final List<Action> actions = getActionsFilterByLastSeen(seenIssues, issue, preFilteredActions);
                         final List<Action> filteredActions = actions.stream().filter(a -> a.isInRange(startDate, endDate)).collect(Collectors.toList());
 
-                        if(jiraissues && !filteredActions.isEmpty()) {
+                        if(this.jiraIssues && !filteredActions.isEmpty()) {
                             final Action action = pageProvider.getJiraissues(filteredActions.get(filteredActions.size()-1), issue);
                             pageProvider.writeIssue(action);
                         }

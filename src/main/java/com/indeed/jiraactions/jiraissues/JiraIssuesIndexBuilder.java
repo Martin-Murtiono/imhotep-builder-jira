@@ -28,7 +28,6 @@ public class JiraIssuesIndexBuilder {
             final Stopwatch downloadStopwatch = Stopwatch.createStarted();
             log.info("Downloading previous day's TSV.");
             fileWriter.downloadTsv(JiraActionsUtil.parseDateTime(config.getStartDate()));
-            log.debug("Took {} ms to download previous day's TSV.", downloadStopwatch.elapsed(TimeUnit.MILLISECONDS));
             this.downloadTime = downloadStopwatch.elapsed(TimeUnit.MILLISECONDS);
 
             fileWriter.parseNewTsv();
@@ -39,13 +38,11 @@ public class JiraIssuesIndexBuilder {
             final Stopwatch processStopwatch = Stopwatch.createStarted();
             log.debug("Updating TSV file.");
             fileWriter.process();
-            log.debug("{} ms to update TSV.", processStopwatch.elapsed(TimeUnit.MILLISECONDS));
             this.processTime = processStopwatch.elapsed(TimeUnit.MILLISECONDS);
             processStopwatch.stop();
 
             final Stopwatch uploadStopwatch = Stopwatch.createStarted();
             fileWriter.uploadTsv();
-            log.debug("{} ms to upload TSV.", uploadStopwatch.elapsed(TimeUnit.MILLISECONDS));
             this.uploadTime = uploadStopwatch.elapsed(TimeUnit.MILLISECONDS);
             uploadStopwatch.stop();
 

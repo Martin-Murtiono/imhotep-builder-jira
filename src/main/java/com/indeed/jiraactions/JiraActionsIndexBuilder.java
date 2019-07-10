@@ -70,9 +70,9 @@ public class JiraActionsIndexBuilder {
             fileTime += headerStopwatch.elapsed(TimeUnit.MILLISECONDS);
 
             final ApiPageProvider apiPageProvider = new ApiPageProvider(issuesAPICaller, actionFactory, config, writer);
-            final Paginator paginator = new Paginator(apiPageProvider, startDate, endDate);
+            final Paginator paginator = new Paginator(apiPageProvider, startDate, endDate, config.getJiraissues());
 
-            paginator.process(config.getJiraissues());
+            paginator.process();
             fileTime += apiPageProvider.getFileWritingTime();
             final long apiTime = apiPageProvider.getApiTime();
             final long processTime = apiPageProvider.getProcessingTime();
