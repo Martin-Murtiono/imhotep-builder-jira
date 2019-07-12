@@ -11,7 +11,6 @@ import com.indeed.jiraactions.api.customfields.CustomFieldDefinition;
 import com.indeed.jiraactions.api.links.LinkTypesApiCaller;
 import com.indeed.jiraactions.api.statustimes.StatusTypesApiCaller;
 import com.indeed.jiraactions.jiraissues.JiraIssuesIndexBuilder;
-import javafx.scene.paint.Stop;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.joda.time.DateTime;
@@ -92,9 +91,9 @@ public class JiraActionsIndexBuilder {
             log.debug("No values seen for these custom fields: " + missedFields);
 
             final Stopwatch jiraIssuesStopwatch = Stopwatch.createStarted();
-            final JiraIssuesIndexBuilder jiraIssuesIndexBuilder = new JiraIssuesIndexBuilder(config);
+            final JiraIssuesIndexBuilder jiraIssuesIndexBuilder = new JiraIssuesIndexBuilder(config, writer.getIssues());
             if(config.getJiraissues()) {
-                log.info("Building jiraissues.");
+                log.info("Building jiraissues with {} new/updated issues.", writer.getIssues().size());
                 jiraIssuesIndexBuilder.run();
             } else {
                 log.info("Not building jiraissues.");

@@ -2,8 +2,6 @@ package com.indeed.jiraactions.jiraissues;
 
 import com.indeed.jiraactions.JiraActionsIndexBuilderConfig;
 import org.apache.commons.codec.binary.Base64;
-import com.univocity.parsers.tsv.TsvParser;
-import com.univocity.parsers.tsv.TsvParserSettings;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ContentType;
@@ -18,13 +16,13 @@ import java.io.BufferedInputStream;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class JiraIssuesFileWriter {
@@ -33,23 +31,21 @@ public class JiraIssuesFileWriter {
     private final JiraActionsIndexBuilderConfig config;
 
     private WriterData writerData;
-    private List<String[]> newIssues = new ArrayList<>();
-    private TsvParserSettings settings = new TsvParserSettings();
-    private String[] headers;
+    private List<String> newFields = new ArrayList<>();
+    private List<String> nonApiStatuses = new ArrayList<>();
+
 
     public JiraIssuesFileWriter(JiraActionsIndexBuilderConfig config) {
         this.config = config;
-        this.settings = setupSettings(this.settings);
     }
 
-    public TsvParserSettings setupSettings(TsvParserSettings settings) {
-        settings.getFormat().setLineSeparator("\n");
-        settings.setMaxColumns(1000);
-        settings.setMaxCharsPerColumn(10000);
-        settings.setNullValue("");
-        return settings;
+    public void setNewFields(final List<String> newFields) {
+        this.newFields = newFields;
     }
 
+    public List<String> getNonApiStatuses() {
+        return nonApiStatuses;
+    }
 
     public void downloadTsv(DateTime date) throws IOException {
         String formattedDate = date.minusDays(1).toString("yyyyMMdd");
@@ -62,15 +58,14 @@ public class JiraIssuesFileWriter {
         final FileOutputStream stream = new FileOutputStream(file);
 
         for(int i = 0; i <= NUM_RETRIES; i++) {
-            try {
-                URL url = new URL("https://squall.indeed.com/iupload/repository/qa/index/jiraissues/file/indexed/jiraissues_" + formattedDate + ".tsv/");
-                if (i == 5) {
-                    url = new URL("https://squall.indeed.com/iupload/repository/qa/index/jiraissues/file/indexing/jiraissues_" + formattedDate + ".tsv/");
-                }
-                HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
-                connection.setRequestProperty("Authorization", basicAuth);
+            URL url = new URL("https://squall.indeed.com/iupload/repository/qa/index/jiraissues/file/indexed/jiraissues_" + formattedDate + ".tsv/");
+            if (i == 5) {
+                url = new URL("https://squall.indeed.com/iupload/repository/qa/index/jiraissues/file/indexing/jiraissues_" + formattedDate + ".tsv/");
+            }
+            HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
+            connection.setRequestProperty("Authorization", basicAuth);
 
-                final BufferedInputStream in = new BufferedInputStream(connection.getInputStream());
+            try (final BufferedInputStream in = new BufferedInputStream(connection.getInputStream())) {
                 int length;
                 final byte[] buffer = new byte[1024];
                 while ((length = in.read(buffer)) > -1) {
@@ -124,78 +119,21 @@ public class JiraIssuesFileWriter {
         }
     }
 
-    public void parseNewTsv() throws Exception {
-        final File file = new File("jiraissues_temp.tsv");
-        FileReader reader = new FileReader(file);
-        TsvParser parser = new TsvParser(settings);
-
-        this.newIssues = parser.parseAll(reader);
-        headers = newIssues.get(0);
-        newIssues.remove(0);
-    }
-
-    public void process() throws Exception {
-        final File file = new File("jiraissues_downloaded.tsv");
-        final FileReader reader = new FileReader(file);
-        final TsvParser parser = new TsvParser(settings);
-
-        parser.beginParsing(reader);
-        parser.parseNext(); // skip headers
-
-
-        /** If the issue is updated through jiraactions it will replace it because that version is the latest.
-        * If it isn't replaced then it gets updated -- only fields involving time are updated so this is really easy.
-         * Issues from jiraactions are removed when they get replaced meaning that the ones remaining are new issues and are therefore added. */
-        int updateCount = 0;
-        int replaceCount = 0;
-        while (true) {
-            boolean replaced = false;
-            String[] row = parser.parseNext();
-            if (row == null) {
-                break;
-            } else {
-                for (String[] issue : newIssues) {
-                    if (row[0].equals(issue[0])) {
-                        replaceCount++;
-                        writeIssue(issue);  // Replace
-                        replaced = true;
-                        newIssues.remove(issue);
-                        break;
-                    }
-                }
-                if (!replaced) {
-                    updateCount++;
-                    writeIssue(updateIssue(row));   // Update
-                }
-            }
-        }
-        log.debug("Updated {}, Replaced {}, issues.", updateCount, replaceCount);
-        int added = 0;
-        if (!newIssues.isEmpty()) {
-            for (String[] issue : newIssues) {
-                writeIssue(issue);  // Add new
-                added++;
-            }
-            log.debug("Added {} new issues.", added);
-            writerData.getBufferedWriter().close();
-        }
-    }
-
-    public void createTsv(DateTime date) throws IOException {
+    public void createTsv(final DateTime date, List<String> fields) throws IOException {
         final String formattedDate = date.toString("yyyyMMdd");
         final File file = new File("jiraissues_" + formattedDate + ".tsv");
         file.deleteOnExit();
         final BufferedWriter bw = new BufferedWriter(new FileWriter(file));
-        final String headerLine = String.join("\t", headers);
-        bw.write(headerLine);
+        final String fieldsLine = String.join("\t", fields);
+        bw.write(fieldsLine);
         bw.newLine();
         bw.flush();
 
         writerData = new WriterData(file, bw);
     }
 
-    public void writeIssue(String[] issue) throws IOException {
-        final String line = Arrays.stream(issue)
+    public void writeIssue(final Map<String, String> issue) {
+        final String line = issue.values().stream()
                 .map(rawValue -> rawValue.replace("\t", "\\t"))
                 .map(rawValue -> rawValue.replace("\n", "\\n"))
                 .map(rawValue -> rawValue.replace("\r", "\\r"))
@@ -206,33 +144,42 @@ public class JiraIssuesFileWriter {
             bw.write(line);
             bw.newLine();
             bw.flush();
-            writerData.getBufferedWriter().flush();
         } catch (final IOException e) {
             log.error("Unable to write new line.", e);
         }
     }
 
-    public String[] updateIssue(String[] issue) {
-        final long DAY = 86400;
-        String status = "";
-        for(int i = 0; i < headers.length; i++) {
-            if(headers[i].equals("issueage") || headers[i].equals("time")) {
-                issue[i] = String.valueOf(Long.parseLong(issue[i]) + DAY);
+    public Map<String, String> updateIssue(final Map<String, String> mappedLine) {
+        final long DAY = TimeUnit.DAYS.toSeconds(1);
+        final String status = formatStatus(mappedLine.get("status"));
+        try {
+            mappedLine.replace("issueage", mappedLine.get("issueage"), String.valueOf(Long.parseLong(mappedLine.get("issueage")) + DAY));
+            mappedLine.replace("time", mappedLine.get("time"), String.valueOf(Long.parseLong(mappedLine.get("time")) + DAY));
+            if(!mappedLine.containsKey("totaltime_" + status)) {
+                nonApiStatuses.add(status);
+            } else {
+                mappedLine.replace("totaltime_" + status, mappedLine.get("totaltime_" + status), String.valueOf(Long.parseLong(mappedLine.get("totaltime_" + status)) + DAY));
             }
-            if(headers[i].equals("status")) {
-                status = issue[i].toLowerCase()
-                        .replace(" ", "_")
-                        .replace("-", "_")
-                        .replace("(", "")
-                        .replace(")", "")
-                        .replace("&", "and")
-                        .replace("/", "_");
-            }
-            if(headers[i].contains(status) && !status.isEmpty() && headers[i].startsWith("totaltime")){
-                issue[i] = String.valueOf(Long.parseLong(issue[i]) + DAY);
+        } catch (final NumberFormatException e) {
+            log.error("Value of field is not numeric.", e);
+        }
+        if(!newFields.isEmpty()) {
+            for(String field : newFields) {
+                mappedLine.put(field, "0");
             }
         }
-        return issue;
+        return mappedLine;
+    }
+
+    private String formatStatus(String status) {
+        return status
+                .toLowerCase()
+                .replace(" ", "_")
+                .replace("-", "_")
+                .replace("(", "")
+                .replace(")", "")
+                .replace("&", "and")
+                .replace("/", "_");
     }
 
     private static class WriterData {

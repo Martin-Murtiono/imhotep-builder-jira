@@ -2,7 +2,6 @@ package com.indeed.jiraactions;
 
 import com.indeed.jiraactions.api.customfields.CustomFieldDefinition;
 
-import com.indeed.jiraactions.api.statustimes.StatusTime;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpResponse;
@@ -20,6 +19,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +34,7 @@ public class TsvFileWriter {
     private final Map<DateMidnight, WriterData> writerDataMapJiraissues;
     private final List<TSVColumnSpec> columnSpecs;
     private final List<TSVColumnSpec> columnSpecsJiraissues;
+    private final List<String[]> issues = new ArrayList<>();
 
     public TsvFileWriter(final JiraActionsIndexBuilderConfig config, final List<String> linkTypes, final List<String> statusTypes) {
         this.config = config;
@@ -54,8 +55,12 @@ public class TsvFileWriter {
         final DateTime endDate = JiraActionsUtil.parseDateTime(config.getEndDate());
         for(DateTime date = JiraActionsUtil.parseDateTime(config.getStartDate()); date.isBefore(endDate); date = date.plusDays(1)) {
             createFileAndWriteHeaders(date);
-            createFileAndWriteHeadersJiraissues(date);
+            setJiraissuesHeaders();
         }
+    }
+
+    public List<String[]> getIssues() {
+        return issues;
     }
 
     private List<TSVColumnSpec> createColumnSpecs(final List<String> linkTypes) {
@@ -119,7 +124,7 @@ public class TsvFileWriter {
                 .addTimeColumn("time", Action::getTimestamp)
                 .addIntColumn("comments", Action::getComments)
                 .addColumn("dateclosed", Action::getDateClosed)
-                .addColumn("dateresovled", Action::getDateResolved)
+                .addColumn("dateresolved", Action::getDateResolved)
                 .addStatusTimeColumns(statusTypes)
                 .addLinkColumns(linkTypes);
 
@@ -150,25 +155,6 @@ public class TsvFileWriter {
         bw.flush();
 
         writerDataMap.put(day.toDateMidnight(), new WriterData(file, bw));
-    }
-
-    private void createFileAndWriteHeadersJiraissues(final DateTime day) throws IOException {
-        final String filename = "jiraissues_temp.tsv";
-        final File file = new File(filename);
-        file.deleteOnExit();
-
-        final BufferedWriter bw = new BufferedWriter(new FileWriter(file));
-
-        final String headerLine = columnSpecsJiraissues.stream()
-                .map(TSVColumnSpec::getHeader)
-                .collect(Collectors.joining("\t"));
-
-        // Write header
-        bw.write(headerLine);
-        bw.newLine();
-        bw.flush();
-
-        writerDataMapJiraissues.put(day.toDateMidnight(), new WriterData(file, bw));
     }
 
     public void writeActions(final List<Action> actions) throws IOException {
@@ -202,34 +188,24 @@ public class TsvFileWriter {
         });
     }
 
+    private void setJiraissuesHeaders() {
+        final String[] headerLine = columnSpecsJiraissues.stream()
+                .map(TSVColumnSpec::getHeader)
+                .toArray(String[]::new);
+        issues.add(headerLine);
+    }
+
     public void writeIssue(final Action action) throws IOException {
         if(action == null) {
             return;
         }
-
-        DateTime day = JiraActionsUtil.parseDateTime(config.getStartDate());
-        final WriterData writerData = writerDataMapJiraissues.get(day.toDateMidnight());
-        final BufferedWriter bw = writerData.getBufferedWriter();
-        writerData.setWritten();
-        writerData.setDirty(true);
-        final String line = columnSpecsJiraissues.stream()
+        final String[] line = columnSpecsJiraissues.stream()
                 .map(columnSpec -> columnSpec.getActionExtractor().apply(action))
                 .map(rawValue -> rawValue.replace("\t", "\\t"))
                 .map(rawValue -> rawValue.replace("\n", "\\n"))
                 .map(rawValue -> rawValue.replace("\r", "\\r"))
-                .collect(Collectors.joining("\t"));
-        bw.write(line);
-        bw.newLine();
-
-        writerDataMapJiraissues.values().stream()
-                .filter(WriterData::isDirty).forEach(x -> {
-            try {
-                x.getBufferedWriter().flush();
-                x.setDirty(false);
-            } catch (final IOException e) {
-                log.error("Failed to flush.", e);
-            }
-        });
+                .toArray(String[]::new);
+        issues.add(line);
     }
 
     private static final int NUM_RETRIES = 5;

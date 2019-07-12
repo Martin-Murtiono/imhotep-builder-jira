@@ -31,7 +31,6 @@ public class ApiPageProvider implements PageProvider {
     private final DateTime startDate;
     @SuppressWarnings("FieldCanBeLocal")
 
-    private final JiraActionsIndexBuilderConfig config;
     private final DateTime endDate;
     private final Set<CustomFieldDefinition> customFieldsSeen;
 
@@ -43,7 +42,6 @@ public class ApiPageProvider implements PageProvider {
                            final JiraActionsIndexBuilderConfig config, final TsvFileWriter tsvFileWriter) {
         this.issuesAPICaller = issuesAPICaller;
         this.actionFactory = actionFactory;
-        this.config = config;
         this.tsvFileWriter = tsvFileWriter;
 
         this.startDate = JiraActionsUtil.parseDateTime(config.getStartDate());
