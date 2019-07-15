@@ -1,6 +1,7 @@
 package com.indeed.jiraactions.jiraissues;
 
 import com.indeed.jiraactions.JiraActionsIndexBuilderConfig;
+import com.indeed.jiraactions.JiraActionsUtil;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpPost;
@@ -22,7 +23,6 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class JiraIssuesFileWriter {
@@ -31,23 +31,16 @@ public class JiraIssuesFileWriter {
     private final JiraActionsIndexBuilderConfig config;
 
     private WriterData writerData;
-    private List<String> newFields = new ArrayList<>();
-    private List<String> nonApiStatuses = new ArrayList<>();
+    private List<String> fields = new ArrayList<>();
 
 
     public JiraIssuesFileWriter(JiraActionsIndexBuilderConfig config) {
         this.config = config;
     }
 
-    public void setNewFields(final List<String> newFields) {
-        this.newFields = newFields;
-    }
-
-    public List<String> getNonApiStatuses() {
-        return nonApiStatuses;
-    }
-
-    public void downloadTsv(DateTime date) throws IOException {
+    private static final int NUM_RETRIES = 5;
+    public void downloadTsv() throws IOException {
+        DateTime date = JiraActionsUtil.parseDateTime(config.getStartDate());
         String formattedDate = date.minusDays(1).toString("yyyyMMdd");
 
         final String userPass = config.getIuploadUsername() + ":" + config.getIuploadPassword();
@@ -81,7 +74,6 @@ public class JiraIssuesFileWriter {
         }
     }
 
-    private static final int NUM_RETRIES = 5;
     public void uploadTsv() {
         final String iuploadUrl = String.format("https://squall.indeed.com/iupload/repository/qa/index/jiraissues/file/");
 
@@ -119,7 +111,8 @@ public class JiraIssuesFileWriter {
         }
     }
 
-    public void createTsv(final DateTime date, List<String> fields) throws IOException {
+    public void createTsvAndSetHeaders() throws IOException {
+        DateTime date = JiraActionsUtil.parseDateTime(config.getStartDate());
         final String formattedDate = date.toString("yyyyMMdd");
         final File file = new File("jiraissues_" + formattedDate + ".tsv");
         file.deleteOnExit();
@@ -149,37 +142,8 @@ public class JiraIssuesFileWriter {
         }
     }
 
-    public Map<String, String> updateIssue(final Map<String, String> mappedLine) {
-        final long DAY = TimeUnit.DAYS.toSeconds(1);
-        final String status = formatStatus(mappedLine.get("status"));
-        try {
-            mappedLine.replace("issueage", mappedLine.get("issueage"), String.valueOf(Long.parseLong(mappedLine.get("issueage")) + DAY));
-            mappedLine.replace("time", mappedLine.get("time"), String.valueOf(Long.parseLong(mappedLine.get("time")) + DAY));
-            if(!mappedLine.containsKey("totaltime_" + status)) {
-                nonApiStatuses.add(status);
-            } else {
-                mappedLine.replace("totaltime_" + status, mappedLine.get("totaltime_" + status), String.valueOf(Long.parseLong(mappedLine.get("totaltime_" + status)) + DAY));
-            }
-        } catch (final NumberFormatException e) {
-            log.error("Value of field is not numeric.", e);
-        }
-        if(!newFields.isEmpty()) {
-            for(String field : newFields) {
-                mappedLine.put(field, "0");
-            }
-        }
-        return mappedLine;
-    }
-
-    private String formatStatus(String status) {
-        return status
-                .toLowerCase()
-                .replace(" ", "_")
-                .replace("-", "_")
-                .replace("(", "")
-                .replace(")", "")
-                .replace("&", "and")
-                .replace("/", "_");
+    public void setFields(final List<String> fields) {
+        this.fields = fields;
     }
 
     private static class WriterData {
