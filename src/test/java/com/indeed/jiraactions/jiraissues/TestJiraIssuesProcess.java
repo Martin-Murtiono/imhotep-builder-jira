@@ -11,25 +11,24 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class TestJiraIssuesProcess {
-    JiraIssuesProcess process;
+    JiraIssuesProcess process = new JiraIssuesProcess();
     List<String[]> newIssues = new ArrayList<>();
+    String[] fields = {"issuekey", "status", "time", "issueage", "totaltime_open", "totaltime_pending_triage", "totaltime_in_progress", "totaltime_closed"};
 
     @Before
     public void setup() {
         setupNewIssues();
-        process = new JiraIssuesProcess();
 
         process.setNewIssues(newIssues);
         process.convertToMap();
 
-        String[] headers = {"issuekey", "status", "time", "issueage", "totaltime_open", "totaltime_pending_triage", "totaltime_in_progress", "totaltime_closed"};
-        process.setOldFields(Arrays.stream(headers).collect(Collectors.toList()));
+        process.setOldFields(Arrays.stream(fields).collect(Collectors.toList()));
     }
 
     @Test
     public void testCompare() {
         // The issues being passed in are the old issues from the previous day.
-        String[] issue1 = {"A", "Pending Triage", "0", "0", "0"};   // Test Replacing Process
+        String[] issue1 = {"A", "Pending Triage", "0", "0", "0", "0", "0", "0"};   // Test Replacing Process
         Map<String, String> output1 = process.compareAndUpdate(issue1);
         String[] expected1 = {"A", "In Progress", "86400", "86400", "0", "86400", "0", "0"};
         Assert.assertEquals(expected1, output1.values().toArray());
@@ -42,9 +41,9 @@ public class TestJiraIssuesProcess {
 
     @Test
     public void testGetRemainingIssues() {
-        String[] issue1 = {"A", "Pending Triage", "0", "0", "0"};
+        String[] issue1 = {"A", "Pending Triage", "0", "0", "0", "0", "0", "0"};
         String[] issue2 = {"B", "Closed", "0", "0", "0", "0", "0", "0"};
-        process.compareAndUpdate(issue1);
+        process.compareAndUpdate(issue1);   // The issue is removed if it is replaced when passed in the compare method.
         process.compareAndUpdate(issue2);
 
         List<Map<String, String>> remainingIssues = process.getRemainingIssues();
@@ -72,8 +71,7 @@ public class TestJiraIssuesProcess {
     }
 
     public void setupNewIssues() {
-        String[] headers = {"issuekey", "status", "time", "issueage", "totaltime_open", "totaltime_pending_triage", "totaltime_in_progress", "totaltime_closed"};
-        newIssues.add(headers);
+        newIssues.add(fields);
         String[] issue1 = {"A", "In Progress", "86400", "86400", "0", "86400", "0", "0"};
         newIssues.add(issue1);
         String[] issue2 = {"C", "Open", "86400", "86400", "0", "0", "0", "0"};
