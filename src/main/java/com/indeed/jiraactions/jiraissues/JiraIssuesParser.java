@@ -21,7 +21,6 @@ public class JiraIssuesParser {
     private final JiraIssuesFileWriter fileWriter;
 
     private List<String[]> newIssues;
-    private List<String> fields;
     private File file;
     private FileReader reader;
     private TsvParser parser;
@@ -46,8 +45,7 @@ public class JiraIssuesParser {
         this.parser = new TsvParser(settings);
         parser.beginParsing(reader);
 
-        fields = Arrays.stream(newIssues.get(0)).collect(Collectors.toList());
-        fileWriter.setFields(fields);   // Sets fields of the TSV using new issues.
+        fileWriter.setFields(Arrays.stream(newIssues.get(0)).collect(Collectors.toList()));   // Sets fields of the TSV using new issues.
 
         process.setOldFields(Arrays.stream(parser.parseNext()).collect(Collectors.toList()));
         process.setNewIssues(newIssues);
@@ -57,26 +55,17 @@ public class JiraIssuesParser {
     public void parseTsv() {
         int counter = 0;
         while(true) {
-            String[] issue = getIssue();
+            String[] issue = parser.parseNext();
             if (issue == null) {
                 break;
             } else {
-                writeIssue(process.compareAndUpdate(issue));
+                fileWriter.writeIssue(process.compareAndUpdate(issue));
                 counter++;
             }
         }
         log.debug("Updated/Replaced {} Issues.", counter);
         for(Map<String, String> issue : process.getRemainingIssues()) {     // Adds the remaining issues
-            writeIssue(issue);
+            fileWriter.writeIssue(issue);
         }
     }
-
-    public String[] getIssue() {
-        return parser.parseNext();
-    }
-
-    public void writeIssue(final Map<String, String> issue) {
-        fileWriter.writeIssue(issue);
-    }
-
 }
