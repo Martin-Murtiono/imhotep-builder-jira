@@ -20,14 +20,14 @@ public class TestJiraIssuesProcess {
         setupNewIssues();
 
         process.setNewIssues(newIssues);
-        process.convertToMap();
-
+        process.setFields(Arrays.stream(fields).collect(Collectors.toList()));
         process.setOldFields(Arrays.stream(fields).collect(Collectors.toList()));
+        process.convertToMap();
     }
 
     @Test
     public void testCompare() {
-        // The issues being passed in are the old issues from the previous day.
+        // The issues being passed in would be the old issues from the previous day.
         String[] issue1 = {"A", "Pending Triage", "0", "0", "0", "0", "0", "0"};   // Test Replacing Process
         Map<String, String> output1 = process.compareAndUpdate(issue1);
         String[] expected1 = {"A", "In Progress", "86400", "86400", "0", "86400", "0", "0"};
@@ -37,6 +37,11 @@ public class TestJiraIssuesProcess {
         Map<String, String> output2 = process.compareAndUpdate(issue2);
         String[] expected2 = {"B", "Closed", "86400", "86400", "0", "0", "0", "86400"};
         Assert.assertEquals(expected2, output2.values().toArray());
+
+        String[] issue3 = {"", "", "0", "0", "0", "0", "0", "0"};       // Test blank issuekey and status
+        Map<String, String> output3 = process.compareAndUpdate(issue3);
+        String[] expected3 = {"", "", "86400", "86400", "0", "0", "0", "0"};
+        Assert.assertEquals(expected3, output3.values().toArray());
     }
 
     @Test
@@ -55,6 +60,13 @@ public class TestJiraIssuesProcess {
     }
 
     @Test
+    public void testNonApiStatuses() {
+        String[] issue = {"D", "Accepted", "0", "0", "0", "0", "0", "0"};       // "Accepted" is in the API but it isn't in the fields that were set
+        process.compareAndUpdate(issue);
+        Assert.assertEquals("Accepted", process.getNonApiStatuses().get(0));
+    }
+
+    @Test
     public void testNewFields() {
         JiraIssuesProcess process1 = new JiraIssuesProcess();
 
@@ -65,16 +77,16 @@ public class TestJiraIssuesProcess {
         String[] oldFields = {"A", "B", "C", "D"};
         process1.setNewIssues(newIssues);
         process1.setOldFields(Arrays.stream(oldFields).collect(Collectors.toList()));
-        process1.convertToMap();
+        process1.setFields(Arrays.stream(newFields).collect(Collectors.toList()));
         process1.checkAndAddNewFields();
         Assert.assertEquals("E", process1.getNewFields().get(0));
     }
 
     public void setupNewIssues() {
         newIssues.add(fields);
-        String[] issue1 = {"A", "In Progress", "86400", "86400", "0", "86400", "0", "0"};
+        String[] issue1 = {"A", "In Progress", "86400", "86400", "0", "86400", "0", "0"};       // Should replace previous day's issue
         newIssues.add(issue1);
-        String[] issue2 = {"C", "Open", "86400", "86400", "0", "0", "0", "0"};
+        String[] issue2 = {"C", "Open", "86400", "86400", "0", "0", "0", "0"};      // Should be added
         newIssues.add(issue2);
     }
 

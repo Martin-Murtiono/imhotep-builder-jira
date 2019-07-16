@@ -5,12 +5,10 @@ import org.slf4j.LoggerFactory;
 
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 public class JiraIssuesProcess {
     private static final Logger log = LoggerFactory.getLogger(JiraIssuesIndexBuilder.class);
@@ -24,23 +22,8 @@ public class JiraIssuesProcess {
 
     public JiraIssuesProcess() {}
 
-    public void setNewIssues(final List<String[]> newIssues) {
-        this.newIssues = newIssues;
-    }
-
-    public void setOldFields(final List<String> oldFields) {
-        this.oldFields = oldFields;
-    }
-
-    public List<String> getNewFields() {
-        return newFields;
-    }
-
     public void convertToMap() {
-        fields = Arrays.stream(newIssues.get(0)).collect(Collectors.toList());
-        newIssues.remove(0);
-
-        for(int issue = 0; issue < newIssues.size(); issue++) {
+        for(int issue = 1; issue < newIssues.size(); issue++) {
             final Map<String, String> mappedLine = new LinkedHashMap<>(fields.size());
             final String[] line = newIssues.get(issue);
             if(line == null) {
@@ -90,9 +73,7 @@ public class JiraIssuesProcess {
     public List<Map<String, String>> getRemainingIssues() {
         final List<Map<String, String>> addedIssues = new ArrayList<>();
         if (!newIssues.isEmpty()) {
-            for (Map<String, String> issue: newIssuesMapped) {
-                addedIssues.add(issue);
-            }
+            addedIssues.addAll(newIssuesMapped);
             log.debug("Added {} new issues.", addedIssues.size());
         }
         return addedIssues;
@@ -105,7 +86,7 @@ public class JiraIssuesProcess {
             mappedLine.replace("issueage", mappedLine.get("issueage"), String.valueOf(Long.parseLong(mappedLine.get("issueage")) + DAY));
             mappedLine.replace("time", mappedLine.get("time"), String.valueOf(Long.parseLong(mappedLine.get("time")) + DAY));
             if(!mappedLine.containsKey("totaltime_" + status)) {
-                nonApiStatuses.add(status);
+                nonApiStatuses.add(mappedLine.get("status"));
             } else {
                 mappedLine.replace("totaltime_" + status, mappedLine.get("totaltime_" + status), String.valueOf(Long.parseLong(mappedLine.get("totaltime_" + status)) + DAY));
             }
@@ -121,6 +102,9 @@ public class JiraIssuesProcess {
     }
 
     private String formatStatus(String status) {
+        if (status.equals("")) {
+            return "";
+        }
         return status
                 .toLowerCase()
                 .replace(" ", "_")
@@ -129,5 +113,25 @@ public class JiraIssuesProcess {
                 .replace(")", "")
                 .replace("&", "and")
                 .replace("/", "_");
+    }
+
+    public void setNewIssues(final List<String[]> newIssues) {
+        this.newIssues = newIssues;
+    }
+
+    public void setOldFields(final List<String> oldFields) {
+        this.oldFields = oldFields;
+    }
+
+    public List<String> getNewFields() {
+        return newFields;
+    }
+
+    public List<String> getNonApiStatuses() {
+        return nonApiStatuses;
+    }
+
+    public void setFields(final List<String> fields) {
+        this.fields = fields;
     }
 }

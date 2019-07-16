@@ -39,16 +39,17 @@ public class JiraIssuesParser {
         return settings;
     }
 
-    public void setupParser() throws FileNotFoundException {
-        this.file = new File("jiraissues_downloaded.tsv");
-        this.reader = new FileReader(file);
-        this.parser = new TsvParser(settings);
+    public void setupParserAndProcess() throws FileNotFoundException {
+        file = new File("jiraissues_downloaded.tsv");
+        reader = new FileReader(file);
+        parser = new TsvParser(settings);
         parser.beginParsing(reader);
 
         fileWriter.setFields(Arrays.stream(newIssues.get(0)).collect(Collectors.toList()));   // Sets fields of the TSV using new issues.
 
-        process.setOldFields(Arrays.stream(parser.parseNext()).collect(Collectors.toList()));
+        process.setFields(Arrays.stream(newIssues.get(0)).collect(Collectors.toList()));
         process.setNewIssues(newIssues);
+        process.setOldFields(Arrays.stream(parser.parseNext()).collect(Collectors.toList()));
         process.convertToMap();
     }
 
