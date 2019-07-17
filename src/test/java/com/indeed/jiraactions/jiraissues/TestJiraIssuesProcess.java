@@ -61,7 +61,7 @@ public class TestJiraIssuesProcess {
 
     @Test
     public void testNonApiStatuses() {
-        String[] issue = {"D", "Accepted", "0", "0", "0", "0", "0", "0"};       // "Accepted" is in the API but it isn't in the fields that were set
+        String[] issue = {"D", "Accepted", "0", "0", "0", "0", "0", "0"};       // "Accepted" is in the API but it isn't in the fields that were set for these tests
         process.compareAndUpdate(issue);
         Assert.assertEquals("Accepted", process.getNonApiStatuses().get(0));
     }
@@ -71,15 +71,21 @@ public class TestJiraIssuesProcess {
         JiraIssuesProcess process1 = new JiraIssuesProcess();
 
         List<String[]> newIssues = new ArrayList<>();
-        String[] newFields = {"A", "B", "C", "D", "E"};
+        String[] newFields = {"issuekey", "status", "time", "issueage", "totaltime_open","totaltime_closed"};
         newIssues.add(newFields);
 
-        String[] oldFields = {"A", "B", "C", "D"};
+        String[] oldFields = {"issuekey", "status", "time", "issueage", "totaltime_open"};
         process1.setNewIssues(newIssues);
         process1.setOldFields(Arrays.stream(oldFields).collect(Collectors.toList()));
         process1.setFields(Arrays.stream(newFields).collect(Collectors.toList()));
         process1.checkAndAddNewFields();
-        Assert.assertEquals("E", process1.getNewFields().get(0));
+        Assert.assertEquals("totaltime_closed", process1.getNewFields().get(0));
+
+        String[] issue = {"A", "Open", "0", "0", "0"};
+        Map<String, String> output = process1.compareAndUpdate(issue);
+        String[] expected = {"A", "Open", "86400", "86400", "86400", "0"};      // If there is a new field it will set "0" as the value for that field
+        System.out.println(String.join(" ", output.values()));
+        Assert.assertEquals(expected, output.values().toArray());
     }
 
     public void setupNewIssues() {

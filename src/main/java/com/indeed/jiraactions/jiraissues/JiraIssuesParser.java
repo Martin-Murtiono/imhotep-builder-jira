@@ -1,5 +1,6 @@
 package com.indeed.jiraactions.jiraissues;
 
+import com.google.common.base.Stopwatch;
 import com.univocity.parsers.tsv.TsvParser;
 import com.univocity.parsers.tsv.TsvParserSettings;
 import org.slf4j.Logger;
@@ -11,6 +12,7 @@ import java.io.FileReader;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class JiraIssuesParser {
@@ -54,14 +56,19 @@ public class JiraIssuesParser {
     }
 
     public void parseTsv() {
+        Stopwatch stopwatch = Stopwatch.createStarted();
         int counter = 0;
         while(true) {
             String[] issue = parser.parseNext();
             if (issue == null) {
+                stopwatch.stop();
                 break;
             } else {
                 fileWriter.writeIssue(process.compareAndUpdate(issue));
                 counter++;
+                if (counter % 25000 == 0) {
+                    log.debug("{} ms to parse {} issues.", stopwatch.elapsed(TimeUnit.MILLISECONDS), counter);
+                }
             }
         }
         log.debug("Updated/Replaced {} Issues.", counter);

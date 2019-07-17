@@ -30,8 +30,8 @@ public class ApiCaller {
         this.authentication = getBasicAuth();
         this.client = new OkHttpClient.Builder()
                 .connectionPool(new ConnectionPool())
-                .connectTimeout(1, TimeUnit.MINUTES)
-                .readTimeout(15000, TimeUnit.MILLISECONDS)
+                .connectTimeout(2, TimeUnit.MINUTES)
+                .readTimeout(20000, TimeUnit.MILLISECONDS)
                 .build();
     }
 
