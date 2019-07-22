@@ -112,7 +112,7 @@ public class JiraIssuesFileWriter {
     }
 
     public void createTsvAndSetHeaders() throws IOException {
-        DateTime date = JiraActionsUtil.parseDateTime(config.getStartDate());
+        final DateTime date = JiraActionsUtil.parseDateTime(config.getStartDate());
         final String formattedDate = date.toString("yyyyMMdd");
         final File file = new File("jiraissues_" + formattedDate + ".tsv");
         file.deleteOnExit();

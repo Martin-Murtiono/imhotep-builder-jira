@@ -40,10 +40,12 @@ public interface Action {
     String getComponents();
     String getLabels();
     String getCreatedDate();
+    int getCreatedDateInt();
+    int getClosedDate();
+    int getResolvedDate();
+    long getDlt();
     String getPriority();
     int getComments();
-    String getDateResolved();
-    String getDateClosed();
     List<StatusTime> getStatustimes();
     Map<CustomFieldDefinition, CustomFieldValue> getCustomFieldValues();
     Set<Link> getLinks();

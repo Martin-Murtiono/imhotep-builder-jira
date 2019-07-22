@@ -50,11 +50,11 @@ public class JiraIssuesProcess {
         }
     }
 
-    public Map<String, String> compareAndUpdate(String[] issue) {
-        /* If the issue is updated through jiraactions it will replace it because that version is the latest.
-         * If it isn't replaced then it gets updated -- only fields involving time are updated so this is really easy.
-         * Issues from jiraactions are removed when they get replaced meaning that the ones remaining are new issues and are therefore added.
-         */
+    /* If the issue is updated through jiraactions it will replace it because that version is the latest.
+     * If it isn't replaced then it gets updated -- only fields involving time are updated so this is really easy.
+     * Issues from jiraactions are removed when they get replaced meaning that the ones remaining are new issues and are therefore added.
+     */
+    public Map<String, String> compareAndUpdate(final String[] issue) {
         final Map<String, String> mappedLine = new LinkedHashMap<>();
         // Changes the issue from a String[] to a Map<String, String>
         for(int i = 0; i < issue.length; i++) {
@@ -85,18 +85,26 @@ public class JiraIssuesProcess {
         try {
             mappedLine.replace("issueage", mappedLine.get("issueage"), String.valueOf(Long.parseLong(mappedLine.get("issueage")) + DAY));
             mappedLine.replace("time", mappedLine.get("time"), String.valueOf(Long.parseLong(mappedLine.get("time")) + DAY));
+
             if(!mappedLine.containsKey("totaltime_" + status)) {
                 nonApiStatuses.add(mappedLine.get("status"));
             } else {
                 mappedLine.replace("totaltime_" + status, mappedLine.get("totaltime_" + status), String.valueOf(Long.parseLong(mappedLine.get("totaltime_" + status)) + DAY));
             }
+
         } catch (final NumberFormatException e) {
             log.error("Value of field is not numeric.", e);
         }
         if(!newFields.isEmpty()) {
-            for(String field : newFields) {
-                mappedLine.put(field, "0");
+            final Map<String, String> mappedLineNewFields = new LinkedHashMap<>();
+            for(String field : fields) {
+                if(!mappedLine.containsKey(field)) {
+                    mappedLineNewFields.put(field, "0");
+                } else {
+                    mappedLineNewFields.put(field, mappedLine.get(field));
+                }
             }
+            return mappedLineNewFields;
         }
         return mappedLine;
     }

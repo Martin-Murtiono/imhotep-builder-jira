@@ -22,7 +22,7 @@ public class JiraIssuesParser {
     private final JiraIssuesProcess process;
     private final JiraIssuesFileWriter fileWriter;
 
-    private List<String[]> newIssues;
+    private final List<String[]> newIssues;
     private File file;
     private FileReader reader;
     private TsvParser parser;
@@ -33,7 +33,7 @@ public class JiraIssuesParser {
         this.newIssues = newIssues;
     }
 
-    private static TsvParserSettings setupSettings(TsvParserSettings settings) {
+    private static TsvParserSettings setupSettings(final TsvParserSettings settings) {
         settings.getFormat().setLineSeparator("\n");
         settings.setMaxColumns(1000);
         settings.setMaxCharsPerColumn(10000);
@@ -72,6 +72,7 @@ public class JiraIssuesParser {
             }
         }
         log.debug("Updated/Replaced {} Issues.", counter);
+        log.debug("Fields not in API {}", process.getNonApiStatuses());
         for(Map<String, String> issue : process.getRemainingIssues()) {     // Adds the remaining issues
             fileWriter.writeIssue(issue);
         }

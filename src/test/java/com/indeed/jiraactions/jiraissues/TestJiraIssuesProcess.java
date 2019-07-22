@@ -71,7 +71,7 @@ public class TestJiraIssuesProcess {
         JiraIssuesProcess process1 = new JiraIssuesProcess();
 
         List<String[]> newIssues = new ArrayList<>();
-        String[] newFields = {"issuekey", "status", "time", "issueage", "totaltime_open","totaltime_closed"};
+        String[] newFields = {"issuekey", "status", "time", "issueage", "totaltime_closed", "totaltime_open"};
         newIssues.add(newFields);
 
         String[] oldFields = {"issuekey", "status", "time", "issueage", "totaltime_open"};
@@ -83,8 +83,7 @@ public class TestJiraIssuesProcess {
 
         String[] issue = {"A", "Open", "0", "0", "0"};
         Map<String, String> output = process1.compareAndUpdate(issue);
-        String[] expected = {"A", "Open", "86400", "86400", "86400", "0"};      // If there is a new field it will set "0" as the value for that field
-        System.out.println(String.join(" ", output.values()));
+        String[] expected = {"A", "Open", "86400", "86400", "0", "86400"};      // If there is a new field it will set "0" as the value for that field
         Assert.assertEquals(expected, output.values().toArray());
     }
 

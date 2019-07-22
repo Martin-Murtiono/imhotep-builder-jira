@@ -107,7 +107,7 @@ public class TsvFileWriter {
                 .addUserColumns("assignee", Action::getAssignee)
                 .addColumn("category", Action::getCategory)
                 .addColumn("components*|", Action::getComponents)
-                .addColumn("createdate", Action::getCreatedDate)
+                .addIntColumn("createdate", Action::getCreatedDateInt)
                 .addColumn("duedate", Action::getDueDate)
                 .addTimeColumn("int duedate_time", Action::getDueDateTime)
                 .addColumn("fixversion*|", Action::getFixversions)
@@ -123,8 +123,8 @@ public class TsvFileWriter {
                 .addColumn("summary", Action::getSummary)
                 .addTimeColumn("time", Action::getTimestamp)
                 .addIntColumn("comments", Action::getComments)
-                .addColumn("dateclosed", Action::getDateClosed)
-                .addColumn("dateresolved", Action::getDateResolved)
+                .addIntColumn("closedate", Action::getClosedDate)
+                .addIntColumn("resolvedate", Action::getResolvedDate)
                 .addStatusTimeColumns(statusTypes)
                 .addLinkColumns(linkTypes);
 
