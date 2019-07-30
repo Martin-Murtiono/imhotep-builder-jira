@@ -71,7 +71,7 @@ public class TSVSpecBuilder {
             addLongColumn(String.format("timetolast_%s", formattedType), timeToLast);
         }
         final Function<Action, String> valueExtractor = TSVSpecBuilder::getAllStatuses;
-        addColumn("statushistory*", valueExtractor);
+        addColumn("statushistory*|", valueExtractor);
 
         return this;
     }
@@ -166,6 +166,6 @@ public class TSVSpecBuilder {
         final Iterable<String> values = action.getStatustimes().stream()
                 .map(StatusTime::getStatus)::iterator;
 
-        return String.join(" ", values);
+        return String.join("|", values);
     }
 }

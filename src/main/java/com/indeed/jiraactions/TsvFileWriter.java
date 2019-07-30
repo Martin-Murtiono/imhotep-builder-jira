@@ -31,7 +31,6 @@ public class TsvFileWriter {
 
     private final JiraActionsIndexBuilderConfig config;
     private final Map<DateMidnight, WriterData> writerDataMap;
-    private final Map<DateMidnight, WriterData> writerDataMapJiraissues;
     private final List<TSVColumnSpec> columnSpecs;
     private final List<TSVColumnSpec> columnSpecsJiraissues;
     private final List<String[]> issues = new ArrayList<>();
@@ -41,7 +40,6 @@ public class TsvFileWriter {
         final int days = Days.daysBetween(JiraActionsUtil.parseDateTime(config.getStartDate()),
                 JiraActionsUtil.parseDateTime(config.getEndDate())).getDays();
         writerDataMap = new HashMap<>(days);
-        writerDataMapJiraissues = new HashMap<>(days);
         this.columnSpecs = createColumnSpecs(linkTypes);
         this.columnSpecsJiraissues = createColumnSpecsJiraissues(linkTypes, statusTypes);
     }
@@ -125,6 +123,7 @@ public class TsvFileWriter {
                 .addIntColumn("comments", Action::getComments)
                 .addIntColumn("closedate", Action::getClosedDate)
                 .addIntColumn("resolvedate", Action::getResolvedDate)
+                .addLongColumn("dlt", Action::getDlt)
                 .addStatusTimeColumns(statusTypes)
                 .addLinkColumns(linkTypes);
 

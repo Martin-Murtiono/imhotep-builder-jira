@@ -49,24 +49,26 @@ public class JiraIssuesParser {
 
         fileWriter.setFields(Arrays.stream(newIssues.get(0)).collect(Collectors.toList()));   // Sets fields of the TSV using new issues.
 
-        process.setFields(Arrays.stream(newIssues.get(0)).collect(Collectors.toList()));
+        process.setNewFields(Arrays.stream(newIssues.get(0)).collect(Collectors.toList()));
         process.setNewIssues(newIssues);
         process.setOldFields(Arrays.stream(parser.parseNext()).collect(Collectors.toList()));
         process.convertToMap();
     }
 
     public void parseTsv() {
-        Stopwatch stopwatch = Stopwatch.createStarted();
+        final Stopwatch stopwatch = Stopwatch.createStarted();
         int counter = 0;
         while(true) {
-            String[] issue = parser.parseNext();
+            final String[] issue = parser.parseNext();
             if (issue == null) {
                 stopwatch.stop();
                 break;
             } else {
-                fileWriter.writeIssue(process.compareAndUpdate(issue));
+                if(process.compareAndUpdate(issue) != null) {
+                    fileWriter.writeIssue(process.compareAndUpdate(issue));
+                }
                 counter++;
-                if (counter % 25000 == 0) {
+                if (counter % 100000 == 0) {
                     log.debug("{} ms to parse {} issues.", stopwatch.elapsed(TimeUnit.MILLISECONDS), counter);
                 }
             }

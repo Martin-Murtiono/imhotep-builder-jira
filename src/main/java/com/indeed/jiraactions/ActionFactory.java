@@ -36,9 +36,10 @@ public class ActionFactory {
     public Action create(final Issue issue) throws IOException {
         final User assignee = userLookupService.getUser(issue.initialValueKey("assignee", "assigneekey"));
         final User reporter = userLookupService.getUser(issue.initialValueKey("reporter", "reporterkey"));
+        final User actor = userLookupService.getUser(issue.fields.creator == null ? User.INVALID_USER.getKey() : issue.fields.creator.getKey());
         final ImmutableAction.Builder builder = ImmutableAction.builder()
                 .action("create")
-                .actor(issue.fields.creator == null ? User.INVALID_USER : issue.fields.creator)
+                .actor(actor)
                 .assignee(assignee)
                 .fieldschanged("created")
                 .issueage(0)
@@ -58,7 +59,7 @@ public class ActionFactory {
                 .category(issue.initialValue("category"))
                 .fixversions(issue.initialValue("fixversions"))
                 .dueDate(issue.initialValue("duedate"))
-                .components(issue.initialValue("components"))
+                .components(issue.initialValue("component"))
                 .labels(issue.initialValue("labels"))
                 .createdDate(issue.fields.created.toString("yyyy-MM-dd"))
                 .createdDateInt(Integer.parseInt(issue.fields.created.toString("yyyyMMdd")))
@@ -83,9 +84,12 @@ public class ActionFactory {
         final User reporter = history.itemExist("reporter")
                 ? userLookupService.getUser(history.getItemLastValueKey("reporter"))
                 : prevAction.getReporter();
+        final User actor = userLookupService.getUser(history.author == null
+                ? User.INVALID_USER.getKey()
+                : history.author.getKey());
         final ImmutableAction.Builder builder = ImmutableAction.builder()
                 .action("update")
-                .actor(history.author == null ? User.INVALID_USER: history.author)
+                .actor(actor)
                 .assignee(assignee)
                 .fieldschanged(history.getChangedFields())
                 .issueage(prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), history.created))
@@ -105,7 +109,7 @@ public class ActionFactory {
                 .category(history.itemExist("category") ? history.getItemLastValue("category") : prevAction.getCategory())
                 .fixversions(history.itemExist("fixversions") ? history.getItemLastValue("fixversions") : prevAction.getFixversions())
                 .dueDate(history.itemExist("duedate") ? history.getItemLastValue("duedate").replace(" 00:00:00.0", "") : prevAction.getDueDate())
-                .components(history.itemExist("components") ? history.getItemLastValue("components") : prevAction.getComponents())
+                .components(history.itemExist("component") ? history.getItemLastValue("component") : prevAction.getComponents())
                 .labels(history.itemExist("labels") ? history.getItemLastValue("labels") : prevAction.getLabels())
                 .createdDate(prevAction.getCreatedDate())
                 .createdDateInt(prevAction.getCreatedDateInt())
@@ -124,10 +128,13 @@ public class ActionFactory {
     }
 
     public Action comment(final Action prevAction, final Comment comment) {
+        final User actor = userLookupService.getUser(comment.author == null
+                ? User.INVALID_USER.getKey()
+                : comment.author.getKey());
         return ImmutableAction.builder()
                 .from(prevAction)
                 .action("comment")
-                .actor(comment.author == null ? User.INVALID_USER : comment.author)
+                .actor(actor)
                 .fieldschanged("comment")
                 .issueage(prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), comment.created))
                 .timeinstate(timeInState(prevAction, comment))
@@ -142,7 +149,7 @@ public class ActionFactory {
         return ImmutableAction.builder()
                 .from(prevAction)
                 .issueage(prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), JiraActionsUtil.parseDateTime(config.getEndDate())))
-                .timestamp(JiraActionsUtil.parseDateTime(config.getEndDate()))
+                .timestamp(JiraActionsUtil.parseDateTime(config.getStartDate()))
                 .statustimes(statusTimeFactory.getStatusTimeCurrent(prevAction.getStatustimes(), prevAction, JiraActionsUtil.parseDateTime(config.getEndDate())))
                 .dlt(getDlt(statusTimeFactory.getStatusTimeCurrent(prevAction.getStatustimes(), prevAction, JiraActionsUtil.parseDateTime(config.getEndDate())), prevAction))
                 .build();
@@ -191,7 +198,9 @@ public class ActionFactory {
     }
 
     private long getDlt(final List<StatusTime> statusTimes, final Action prevAction) {
-        if (prevAction.getStatus().equals("Closed") && (prevAction.getResolution().equals("Fixed") || prevAction.getResolution().equals("Done"))) {
+        if (prevAction.getStatus().equals("Closed") &&
+                (prevAction.getResolution().equals("Fixed") || prevAction.getResolution().equals("Done")) &&
+                (prevAction.getIssuetype().equals("Bug") || prevAction.getIssuetype().equals("Improvement") || prevAction.getIssuetype().equals("New Feature"))) {
             long dlt = 0;
             final String[] statusArray = {
                     // In Progress

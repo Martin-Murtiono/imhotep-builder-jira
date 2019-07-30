@@ -1,8 +1,8 @@
 package com.indeed.jiraactions.jiraissues;
 
+import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -15,38 +15,28 @@ public class JiraIssuesProcess {
 
     private final List<Map<String, String>> newIssuesMapped = new ArrayList<>();
     private final List<String> nonApiStatuses = new ArrayList<>(); // Old statuses that don't show up in the API.
-    private final List<String> newFields = new ArrayList<>(); // New fields in updatedIssues not in previous TSV.
     private List<String[]> newIssues;
-    private List<String> fields; // Fields from updatedIssues.
+    private List<String> newFields; // Fields from jiraaction's updated issues.
     private List<String> oldFields; // Fields from previous TSV
 
-    public JiraIssuesProcess() {}
+    public final DateTime startDate;
+
+    public JiraIssuesProcess(final DateTime startDate) {
+        this.startDate = startDate;
+    }
 
     public void convertToMap() {
         for(int issue = 1; issue < newIssues.size(); issue++) {
-            final Map<String, String> mappedLine = new LinkedHashMap<>(fields.size());
+            final Map<String, String> mappedLine = new LinkedHashMap<>(newFields.size());
             final String[] line = newIssues.get(issue);
             if(line == null) {
                 break;
             } else {
                 for(int i = 0; i < line.length; i++) {
-                    mappedLine.put(fields.get(i), line[i]);
+                    mappedLine.put(newFields.get(i), line[i]);
                 }
                 newIssuesMapped.add(mappedLine);
             }
-        }
-    }
-
-    public void checkAndAddNewFields(){
-        if(oldFields.size() != fields.size()) {
-            for(int i = 0; i < fields.size(); i++) {
-                if(!oldFields.contains(fields.get(i))) {
-                    newFields.add(fields.get(i));
-                }
-            }
-            log.debug("New fields: {}", String.join(" ", newFields));
-        } else {
-            log.info("No new fields.");
         }
     }
 
@@ -55,13 +45,24 @@ public class JiraIssuesProcess {
      * Issues from jiraactions are removed when they get replaced meaning that the ones remaining are new issues and are therefore added.
      */
     public Map<String, String> compareAndUpdate(final String[] issue) {
+        final int closeFilter = Integer.parseInt(startDate.minusMonths(6).toString("yyyyMMdd"));
+        final int createFilter = Integer.parseInt(startDate.minusMonths(12).toString("yyyyMMdd"));
         final Map<String, String> mappedLine = new LinkedHashMap<>();
         // Changes the issue from a String[] to a Map<String, String>
         for(int i = 0; i < issue.length; i++) {
             mappedLine.put(oldFields.get(i), issue[i]);
         }
+        // Filters issues to a maximum of a year ago (for unclosed issues) and 6 months (for closed issues).
+        if(mappedLine.containsKey("closedate") && mappedLine.containsKey("createdate")) {
+            if(Integer.parseInt(mappedLine.get("closedate")) < closeFilter && Integer.parseInt(mappedLine.get("closedate")) != 0 ) {
+                return null;
+            }
+            if(Integer.parseInt(mappedLine.get("createdate")) < createFilter && Integer.parseInt(mappedLine.get("closedate")) == 0) {
+                return null;
+            }
+        }
 
-        for (Map<String, String> updatedIssue: newIssuesMapped) {
+        for(Map<String, String> updatedIssue: newIssuesMapped) {
             if (mappedLine.get("issuekey").equals(updatedIssue.get("issuekey"))) {
                 newIssuesMapped.remove(updatedIssue);
                 return updatedIssue;  // Replace
@@ -83,33 +84,34 @@ public class JiraIssuesProcess {
         final long DAY = TimeUnit.DAYS.toSeconds(1);
         final String status = formatStatus(mappedLine.get("status"));
         try {
-            mappedLine.replace("issueage", mappedLine.get("issueage"), String.valueOf(Long.parseLong(mappedLine.get("issueage")) + DAY));
-            mappedLine.replace("time", mappedLine.get("time"), String.valueOf(Long.parseLong(mappedLine.get("time")) + DAY));
-
+            mappedLine.replace("issueage", String.valueOf(Long.parseLong(mappedLine.get("issueage")) + DAY));
+            mappedLine.replace("time", String.valueOf(Long.parseLong(mappedLine.get("time")) + DAY));
             if(!mappedLine.containsKey("totaltime_" + status)) {
                 nonApiStatuses.add(mappedLine.get("status"));
             } else {
                 mappedLine.replace("totaltime_" + status, mappedLine.get("totaltime_" + status), String.valueOf(Long.parseLong(mappedLine.get("totaltime_" + status)) + DAY));
             }
-
         } catch (final NumberFormatException e) {
             log.error("Value of field is not numeric.", e);
         }
-        if(!newFields.isEmpty()) {
-            final Map<String, String> mappedLineNewFields = new LinkedHashMap<>();
-            for(String field : fields) {
-                if(!mappedLine.containsKey(field)) {
+
+        // This part is very important in making sure that the previous TSV will conform to the new fields
+        final Map<String, String> mappedLineNewFields = new LinkedHashMap<>();
+        for(String field : newFields) {
+            if(!mappedLine.containsKey(field)) {
+                if(field.startsWith("totaltime") || field.startsWith("timetofirst") || field.startsWith("timetolast")) {
                     mappedLineNewFields.put(field, "0");
                 } else {
-                    mappedLineNewFields.put(field, mappedLine.get(field));
+                    mappedLineNewFields.put(field, "");
                 }
+            } else {
+                mappedLineNewFields.put(field, mappedLine.get(field));
             }
-            return mappedLineNewFields;
         }
-        return mappedLine;
+        return mappedLineNewFields;
     }
 
-    private String formatStatus(String status) {
+    private String formatStatus(final String status) {
         if (status.equals("")) {
             return "";
         }
@@ -127,19 +129,15 @@ public class JiraIssuesProcess {
         this.newIssues = newIssues;
     }
 
+    public void setNewFields(final List<String> newFields) {
+        this.newFields = newFields;
+    }
+
     public void setOldFields(final List<String> oldFields) {
         this.oldFields = oldFields;
     }
 
-    public List<String> getNewFields() {
-        return newFields;
-    }
-
     public List<String> getNonApiStatuses() {
         return nonApiStatuses;
-    }
-
-    public void setFields(final List<String> fields) {
-        this.fields = fields;
     }
 }

@@ -2,6 +2,7 @@ package com.indeed.jiraactions.jiraissues;
 
 import com.google.common.base.Stopwatch;
 import com.indeed.jiraactions.JiraActionsIndexBuilderConfig;
+import com.indeed.jiraactions.JiraActionsUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,7 +21,7 @@ public class JiraIssuesIndexBuilder {
 
     public JiraIssuesIndexBuilder(final JiraActionsIndexBuilderConfig config, final List<String[]> issues) {
         fileWriter = new JiraIssuesFileWriter(config);
-        process = new JiraIssuesProcess();
+        process = new JiraIssuesProcess(JiraActionsUtil.parseDateTime(config.getStartDate()));
         parser = new JiraIssuesParser(fileWriter, process, issues);
     }
 
@@ -38,13 +39,13 @@ public class JiraIssuesIndexBuilder {
 
             final Stopwatch processStopwatch = Stopwatch.createStarted();
             log.info("Updating TSV file.");
-            process.checkAndAddNewFields();
             parser.parseTsv();
             this.processTime = processStopwatch.elapsed(TimeUnit.MILLISECONDS);
             log.debug("{} ms to update", processTime);
             processStopwatch.stop();
 
             final Stopwatch uploadStopwatch = Stopwatch.createStarted();
+            fileWriter.compressGzip();
             fileWriter.uploadTsv();
             this.uploadTime = uploadStopwatch.elapsed(TimeUnit.MILLISECONDS);
             uploadStopwatch.stop();

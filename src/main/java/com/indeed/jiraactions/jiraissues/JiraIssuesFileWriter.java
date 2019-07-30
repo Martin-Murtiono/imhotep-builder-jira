@@ -13,9 +13,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.HttpsURLConnection;
-import java.io.BufferedInputStream;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 public class JiraIssuesFileWriter {
     private static final Logger log = LoggerFactory.getLogger(JiraIssuesIndexBuilder.class);
@@ -39,9 +41,10 @@ public class JiraIssuesFileWriter {
     }
 
     private static final int NUM_RETRIES = 5;
-    public void downloadTsv() throws IOException {
-        DateTime date = JiraActionsUtil.parseDateTime(config.getStartDate());
-        String formattedDate = date.minusDays(1).toString("yyyyMMdd");
+    public void downloadTsv() throws IOException, InterruptedException {
+        int backoff = 10000;
+        final DateTime date = JiraActionsUtil.parseDateTime(config.getStartDate());
+        final String formattedDate = date.minusDays(1).toString("yyyyMMdd");
 
         final String userPass = config.getIuploadUsername() + ":" + config.getIuploadPassword();
         final String basicAuth = "Basic " + new String(new Base64().encode(userPass.getBytes()));
@@ -50,26 +53,34 @@ public class JiraIssuesFileWriter {
         file.deleteOnExit();
         final FileOutputStream stream = new FileOutputStream(file);
 
-        for(int i = 0; i <= NUM_RETRIES; i++) {
-            URL url = new URL("https://squall.indeed.com/iupload/repository/qa/index/jiraissues/file/indexed/jiraissues_" + formattedDate + ".tsv/");
-            if (i == 5) {
-                url = new URL("https://squall.indeed.com/iupload/repository/qa/index/jiraissues/file/indexing/jiraissues_" + formattedDate + ".tsv/");
-            }
+        for(int tries = 1; tries <= NUM_RETRIES; tries++) {
+            backoff = Math.max(backoff / 2, 10000);
+            URL url = new URL("https://squall.indeed.com/iupload/repository/qa/index/jiraissues/file/indexed/jiraissues_" + formattedDate + ".tsv.gz/");
             HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
             connection.setRequestProperty("Authorization", basicAuth);
-
-            try (final BufferedInputStream in = new BufferedInputStream(connection.getInputStream())) {
+            if (connection.getResponseCode() == 400) {
+                url = new URL("https://squall.indeed.com/iupload/repository/qa/index/jiraissues/file/indexing/jiraissues_" + formattedDate + ".tsv.gz/");
+                log.debug("Previous TSV not finished indexing. Using url {}.", url);
+                connection = (HttpsURLConnection) url.openConnection();
+                connection.setRequestProperty("Authorization", basicAuth);
+            }
+            try (final GZIPInputStream in = new GZIPInputStream(connection.getInputStream())) {
                 int length;
                 final byte[] buffer = new byte[1024];
                 while ((length = in.read(buffer)) > -1) {
                     stream.write(buffer, 0, length);
                 }
-                log.info("Successfully downloaded file.");
+                log.info("Successfully downloaded file with {}.", url);
                 stream.close();
                 in.close();
                 break;
             } catch (final IOException e) {
-                log.error("Unable to download file.", e);
+                log.error("Failed on try {}/5.", tries);
+                if (tries == 5) {
+                    log.error("Failed on final try, aborting.", e);
+                }
+                Thread.sleep(backoff);
+                backoff *= 2;
             }
         }
     }
@@ -87,7 +98,7 @@ public class JiraIssuesFileWriter {
             log.error("Failed to close" + writerData.file.getName() + ".", e);
         }
 
-        final File file = writerData.getFile();
+        final File file = new File(writerData.getFile().getName() + ".gz");
         if (writerData.isWritten()) {
             final HttpPost httpPost = new HttpPost(iuploadUrl);
             httpPost.setHeader("Authorization", basicAuth);
@@ -123,6 +134,25 @@ public class JiraIssuesFileWriter {
         bw.flush();
 
         writerData = new WriterData(file, bw);
+    }
+
+    public void compressGzip() throws IOException {
+        final byte[] buffer = new byte[1024];
+        final File gzip = new File(writerData.getFile().getName() + ".gz");
+        gzip.deleteOnExit();
+        try {
+            final FileInputStream in = new FileInputStream(writerData.getFile());
+            final GZIPOutputStream out = new GZIPOutputStream(new FileOutputStream(gzip));
+            int i;
+            while ((i = in.read(buffer)) > 0) {
+                out.write(buffer, 0, i);
+            }
+            in.close();
+            out.finish();
+            out.close();
+        } catch (final IOException e) {
+            throw e;
+        }
     }
 
     public void writeIssue(final Map<String, String> issue) {

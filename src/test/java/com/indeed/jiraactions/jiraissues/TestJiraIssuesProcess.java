@@ -1,5 +1,6 @@
 package com.indeed.jiraactions.jiraissues;
 
+import org.joda.time.DateTime;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -11,7 +12,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class TestJiraIssuesProcess {
-    JiraIssuesProcess process = new JiraIssuesProcess();
+    DateTime date = DateTime.parse("2019-01-01");
+    JiraIssuesProcess process = new JiraIssuesProcess(date);
     List<String[]> newIssues = new ArrayList<>();
     String[] fields = {"issuekey", "status", "time", "issueage", "totaltime_open", "totaltime_pending_triage", "totaltime_in_progress", "totaltime_closed"};
 
@@ -20,7 +22,7 @@ public class TestJiraIssuesProcess {
         setupNewIssues();
 
         process.setNewIssues(newIssues);
-        process.setFields(Arrays.stream(fields).collect(Collectors.toList()));
+        process.setNewFields(Arrays.stream(fields).collect(Collectors.toList()));
         process.setOldFields(Arrays.stream(fields).collect(Collectors.toList()));
         process.convertToMap();
     }
@@ -60,6 +62,25 @@ public class TestJiraIssuesProcess {
     }
 
     @Test
+    public void testNewFields() {
+        JiraIssuesProcess process = new JiraIssuesProcess(date);
+
+        List<String[]> newIssues = new ArrayList<>();
+        String[] newFields = {"issuekey", "status", "time", "issueage", "totaltime_closed", "totaltime_open"};
+        newIssues.add(newFields);
+
+        String[] oldFields = {"issuekey", "status", "time", "issueage", "totaltime_open"};
+        process.setNewIssues(newIssues);
+        process.setOldFields(Arrays.stream(oldFields).collect(Collectors.toList()));
+        process.setNewFields(Arrays.stream(newFields).collect(Collectors.toList()));
+
+        String[] issue = {"A", "Open", "0", "0", "0"};
+        Map<String, String> output = process.compareAndUpdate(issue);
+        String[] expected = {"A", "Open", "86400", "86400", "0", "86400"};      // If there is a new field it will set "0" as the value for that field
+        Assert.assertEquals(expected, output.values().toArray());
+    }
+
+    @Test
     public void testNonApiStatuses() {
         String[] issue = {"D", "Accepted", "0", "0", "0", "0", "0", "0"};       // "Accepted" is in the API but it isn't in the fields that were set for these tests
         process.compareAndUpdate(issue);
@@ -67,24 +88,56 @@ public class TestJiraIssuesProcess {
     }
 
     @Test
-    public void testNewFields() {
-        JiraIssuesProcess process1 = new JiraIssuesProcess();
+    public void testStatusReplacement() {
+        JiraIssuesProcess process = new JiraIssuesProcess(date);
 
         List<String[]> newIssues = new ArrayList<>();
-        String[] newFields = {"issuekey", "status", "time", "issueage", "totaltime_closed", "totaltime_open"};
+        String[] newFields = {"issuekey", "status", "time", "issueage", "totaltime_c", "totaltime_a"};
         newIssues.add(newFields);
 
-        String[] oldFields = {"issuekey", "status", "time", "issueage", "totaltime_open"};
-        process1.setNewIssues(newIssues);
-        process1.setOldFields(Arrays.stream(oldFields).collect(Collectors.toList()));
-        process1.setFields(Arrays.stream(newFields).collect(Collectors.toList()));
-        process1.checkAndAddNewFields();
-        Assert.assertEquals("totaltime_closed", process1.getNewFields().get(0));
+        String[] oldFields = {"issuekey", "status", "time", "issueage", "totaltime_a", "totaltime_b"};      // b is replaced by c and is placed in a different order
+        process.setNewIssues(newIssues);
+        process.setOldFields(Arrays.stream(oldFields).collect(Collectors.toList()));
+        process.setNewFields(Arrays.stream(newFields).collect(Collectors.toList()));
 
-        String[] issue = {"A", "Open", "0", "0", "0"};
-        Map<String, String> output = process1.compareAndUpdate(issue);
-        String[] expected = {"A", "Open", "86400", "86400", "0", "86400"};      // If there is a new field it will set "0" as the value for that field
+        String[] issue = {"A", "a", "0", "0", "0", "1"};        // There currently isn't a way to check which statuses get replaced so the best it can do is "remove" the old one and set 0 as the new one
+        Map<String, String> output = process.compareAndUpdate(issue);
+        String[] expected = {"A", "a", "86400", "86400", "0", "86400"};
         Assert.assertEquals(expected, output.values().toArray());
+    }
+
+    @Test
+    public void testDateFilter() {
+        // start date is 2019-01-01
+        JiraIssuesProcess process = new JiraIssuesProcess(date);
+
+        List<String[]> newIssues = new ArrayList<>();
+        String[] newFields = {"issuekey", "status", "time", "issueage", "closedate", "createdate"};
+        newIssues.add(newFields);
+
+        String[] oldFields = {"issuekey", "status", "time", "issueage", "closedate", "createdate"};
+        process.setNewIssues(newIssues);
+        process.setOldFields(Arrays.stream(oldFields).collect(Collectors.toList()));
+        process.setNewFields(Arrays.stream(newFields).collect(Collectors.toList()));
+
+        String[] issue1 = {"A", "Closed", "0", "0", "20180101", "20180101"};        // It will not write issues closed longer than 6 months before the start date - filtered.
+        Map<String, String> output1 = process.compareAndUpdate(issue1);
+        Assert.assertNull(output1);
+
+        String[] issue2 = {"B", "Open", "0", "0", "0", "20180601"};     // Created within a year - not filtered.
+        Map<String, String> output2 = process.compareAndUpdate(issue2);
+        String[] expected2 = {"B", "Open", "86400", "86400", "0", "20180601"};
+        Assert.assertEquals(expected2, output2.values().toArray());
+
+        String[] issue3 = {"C", "Open", "0", "0", "0", "20170101"};     // Created over a year ago - filtered.
+        Map<String, String> output3 = process.compareAndUpdate(issue3);
+        Assert.assertNull(output3);
+
+        String[] issue4 = {"D", "Closed", "0", "0", "20181201", "20150101"};    // Although it was created over a year ago, it was closed within 6 months of the start date - not filtered.
+        Map<String, String> output4 = process.compareAndUpdate(issue4);
+        String[] expected4 = {"D", "Closed", "86400", "86400", "20181201", "20150101"};
+        Assert.assertEquals(expected4, output4.values().toArray());
+
     }
 
     public void setupNewIssues() {
