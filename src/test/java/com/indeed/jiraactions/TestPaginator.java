@@ -19,6 +19,7 @@ public class TestPaginator {
     private final DateTime mid = start.plusYears(1);
     private final DateTime end = mid.plusYears(1);
     private final boolean jiraIssues = false;
+    private final boolean jiraIssuesApi = false;
 
     private EasyMockSupport mw;
     private PageProvider provider;
@@ -115,7 +116,7 @@ public class TestPaginator {
 
         mw.replayAll();
 
-        final Paginator paginator = new Paginator(provider, start, end, jiraIssues);
+        final Paginator paginator = new Paginator(provider, start, end, jiraIssues, jiraIssuesApi);
         paginator.process();
 
         mw.verifyAll();
@@ -193,7 +194,7 @@ public class TestPaginator {
 
         mw.replayAll();
 
-        final Paginator paginator = new Paginator(provider, start, end, jiraIssues);
+        final Paginator paginator = new Paginator(provider, start, end, jiraIssues, jiraIssuesApi);
         paginator.process();
 
         mw.verifyAll();
@@ -341,7 +342,7 @@ public class TestPaginator {
         EasyMock.expectLastCall();
 
         mw.replayAll();
-        final Paginator paginator = new Paginator(provider, start, end, jiraIssues);
+        final Paginator paginator = new Paginator(provider, start, end, jiraIssues, jiraIssuesApi);
         paginator.process();
         mw.verifyAll();
     }
@@ -449,7 +450,7 @@ public class TestPaginator {
         EasyMock.expectLastCall();
 
         mw.replayAll();
-        final Paginator paginator = new Paginator(provider, start, end, jiraIssues);
+        final Paginator paginator = new Paginator(provider, start, end, jiraIssues, jiraIssuesApi);
         paginator.process();
         mw.verifyAll();
     }

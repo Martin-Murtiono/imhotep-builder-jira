@@ -23,12 +23,14 @@ public class Paginator {
     private final DateTime startDate;
     private final DateTime endDate;
     private final boolean jiraIssues;
+    private final boolean jiraIssuesApi;
 
-    public Paginator(final PageProvider pageProvider, final DateTime startDate, final DateTime endDate, final boolean jiraIssues) {
+    public Paginator(final PageProvider pageProvider, final DateTime startDate, final DateTime endDate, final boolean jiraIssues, final boolean jiraIssuesApi) {
         this.pageProvider = pageProvider;
         this.startDate = startDate;
         this.endDate = endDate;
         this.jiraIssues = jiraIssues;
+        this.jiraIssuesApi = jiraIssuesApi;
     }
 
     /*
@@ -75,12 +77,27 @@ public class Paginator {
                         final List<Action> actions = getActionsFilterByLastSeen(seenIssues, issue, preFilteredActions);
                         final List<Action> filteredActions = actions.stream().filter(a -> a.isInRange(startDate, endDate)).collect(Collectors.toList());
 
-                        if(this.jiraIssues && !filteredActions.isEmpty()) {
-                            final Action action = pageProvider.getJiraissues(filteredActions.get(filteredActions.size()-1), issue);
-                            pageProvider.writeIssue(action);
+                        if(jiraIssues) {
+                            if(jiraIssuesApi) { // Jiraissues API
+                                final List<Action> apiActions = actions.stream().filter(a -> a.isInRange(startDate.minusMonths(6), endDate)).collect(Collectors.toList());
+                                if(!apiActions.isEmpty()) {
+                                    final Action action = pageProvider.getJiraissues(apiActions.get(apiActions.size()-1), issue);
+                                    if(preFilteredActions.get(preFilteredActions.size()-1).getTimestamp().isBefore(startDate)) {
+                                    }
+                                    if(action.getLastUpdated()>=Integer.parseInt(startDate.minusMonths(6).toString("yyyyMMdd"))) {
+                                        pageProvider.writeIssue(action);
+                                    }
+                                }
+                            } else {    // Jiraactions & Jiraissues TSV
+                                if(!filteredActions.isEmpty()) {
+                                    final Action action = pageProvider.getJiraissues(filteredActions.get(filteredActions.size() - 1), issue);
+                                    pageProvider.writeIssue(action);
+                                }
+                                pageProvider.writeActions(filteredActions);
+                            }
+                        } else {    // Jiraactions
+                            pageProvider.writeActions(filteredActions);
                         }
-                        pageProvider.writeActions(filteredActions);
-
 
                         final boolean ignoreForEndDetection = ignoreUpdatedDate(issue, preFilteredActions);
                         if(!firstPass // Don't bail out the first time through
