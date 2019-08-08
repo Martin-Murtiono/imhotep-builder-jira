@@ -294,9 +294,6 @@ public class TsvFileWriter {
                 File file = wd.getFile();
                 HttpPost httpPost = new HttpPost(iuploadUrl);
                 if(file.getName().startsWith("jiraissues")) {
-                    if(jiraIssuesApi) {
-                        return;
-                    }
 
                     httpPost = new HttpPost(iuploadUrlJiraIssues);
                     final byte[] buffer = new byte[1024];
