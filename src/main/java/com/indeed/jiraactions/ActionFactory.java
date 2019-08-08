@@ -7,10 +7,13 @@ import com.indeed.jiraactions.api.response.issue.Issue;
 import com.indeed.jiraactions.api.response.issue.User;
 import com.indeed.jiraactions.api.response.issue.changelog.histories.History;
 import com.indeed.jiraactions.api.response.issue.fields.comment.Comment;
+import com.indeed.jiraactions.api.statustimes.StatusTime;
+import com.indeed.jiraactions.api.statustimes.StatusTimeFactory;
 import org.joda.time.DateTime;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 public class ActionFactory {
@@ -19,6 +22,7 @@ public class ActionFactory {
     private final CustomFieldApiParser customFieldParser;
     private final JiraActionsIndexBuilderConfig config;
     private final LinkFactory linkFactory = new LinkFactory();
+    private final StatusTimeFactory statusTimeFactory = new StatusTimeFactory();
 
     @SuppressWarnings("WeakerAccess")
     public ActionFactory(final UserLookupService userLookupService,
@@ -32,9 +36,10 @@ public class ActionFactory {
     public Action create(final Issue issue) throws IOException {
         final User assignee = userLookupService.getUser(issue.initialValueKey("assignee", "assigneekey"));
         final User reporter = userLookupService.getUser(issue.initialValueKey("reporter", "reporterkey"));
+        final User actor = userLookupService.getUser(issue.fields.creator == null ? User.INVALID_USER.getKey() : issue.fields.creator.getKey());
         final ImmutableAction.Builder builder = ImmutableAction.builder()
                 .action("create")
-                .actor(issue.fields.creator == null ? User.INVALID_USER : issue.fields.creator)
+                .actor(actor)
                 .assignee(assignee)
                 .fieldschanged("created")
                 .issueage(0)
@@ -54,9 +59,15 @@ public class ActionFactory {
                 .category(issue.initialValue("category"))
                 .fixversions(issue.initialValue("fixversions"))
                 .dueDate(issue.initialValue("duedate"))
-                .components(issue.initialValue("components"))
+                .components(issue.initialValue("component"))
                 .labels(issue.initialValue("labels"))
                 .createdDate(issue.fields.created.toString("yyyy-MM-dd"))
+                .createdDateInt(Integer.parseInt(issue.fields.created.toString("yyyyMMdd")))
+                .closedDate(0)
+                .resolvedDate(0)
+                .comments(0)
+                .dlt(0)
+                .statustimes(statusTimeFactory.firstStatusTime(issue.initialValue("status")))
                 .links(Collections.emptySet());
 
             for(final CustomFieldDefinition customFieldDefinition : config.getCustomFields()) {
@@ -73,9 +84,12 @@ public class ActionFactory {
         final User reporter = history.itemExist("reporter")
                 ? userLookupService.getUser(history.getItemLastValueKey("reporter"))
                 : prevAction.getReporter();
+        final User actor = userLookupService.getUser(history.author == null
+                ? User.INVALID_USER.getKey()
+                : history.author.getKey());
         final ImmutableAction.Builder builder = ImmutableAction.builder()
                 .action("update")
-                .actor(history.author == null ? User.INVALID_USER: history.author)
+                .actor(actor)
                 .assignee(assignee)
                 .fieldschanged(history.getChangedFields())
                 .issueage(prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), history.created))
@@ -95,10 +109,16 @@ public class ActionFactory {
                 .category(history.itemExist("category") ? history.getItemLastValue("category") : prevAction.getCategory())
                 .fixversions(history.itemExist("fixversions") ? history.getItemLastValue("fixversions") : prevAction.getFixversions())
                 .dueDate(history.itemExist("duedate") ? history.getItemLastValue("duedate").replace(" 00:00:00.0", "") : prevAction.getDueDate())
-                .components(history.itemExist("components") ? history.getItemLastValue("components") : prevAction.getComponents())
+                .components(history.itemExist("component") ? history.getItemLastValue("component") : prevAction.getComponents())
                 .labels(history.itemExist("labels") ? history.getItemLastValue("labels") : prevAction.getLabels())
                 .createdDate(prevAction.getCreatedDate())
-                .links(linkFactory.mergeLinks(prevAction.getLinks(), history.getAllItems("link")));
+                .createdDateInt(prevAction.getCreatedDateInt())
+                .closedDate(getDateClosed(prevAction, history))
+                .resolvedDate(getDateResolved(prevAction, history))
+                .comments(prevAction.getComments())
+                .dlt(0)
+                .links(linkFactory.mergeLinks(prevAction.getLinks(), history.getAllItems("link")))
+                .statustimes(statusTimeFactory.getStatusTimeUpdate(prevAction.getStatustimes(), history, prevAction));
 
         for(final CustomFieldDefinition customFieldDefinition : config.getCustomFields()) {
             builder.putCustomFieldValues(customFieldDefinition, customFieldParser.parseNonInitialValue(customFieldDefinition, prevAction, history));
@@ -108,15 +128,30 @@ public class ActionFactory {
     }
 
     public Action comment(final Action prevAction, final Comment comment) {
+        final User actor = userLookupService.getUser(comment.author == null
+                ? User.INVALID_USER.getKey()
+                : comment.author.getKey());
         return ImmutableAction.builder()
                 .from(prevAction)
                 .action("comment")
-                .actor(comment.author == null ? User.INVALID_USER : comment.author)
+                .actor(actor)
                 .fieldschanged("comment")
                 .issueage(prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), comment.created))
                 .timeinstate(timeInState(prevAction, comment))
                 .timesinceaction(getTimeDiff(prevAction.getTimestamp(), comment.created))
                 .timestamp(comment.created)
+                .comments(prevAction.getComments()+1)
+                .statustimes(statusTimeFactory.getStatusTimeComment(prevAction.getStatustimes(), comment, prevAction))
+                .build();
+    }
+
+    public Action toCurrent(final Action prevAction) {
+        return ImmutableAction.builder()
+                .from(prevAction)
+                .issueage(prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), JiraActionsUtil.parseDateTime(config.getEndDate())))
+                .timestamp(JiraActionsUtil.parseDateTime(config.getStartDate()))
+                .statustimes(statusTimeFactory.getStatusTimeCurrent(prevAction.getStatustimes(), prevAction, JiraActionsUtil.parseDateTime(config.getEndDate())))
+                .dlt(getDlt(statusTimeFactory.getStatusTimeCurrent(prevAction.getStatustimes(), prevAction, JiraActionsUtil.parseDateTime(config.getEndDate())), prevAction))
                 .build();
     }
 
@@ -136,8 +171,61 @@ public class ActionFactory {
         return getTimeDiff(prevAction.getTimestamp(), changeTimestamp) + prevAction.getTimeinstate();
     }
 
+    private int getDateResolved(final Action prevAction, final History history) {
+        final String resolution = history.itemExist("resolution") ? history.getItemLastValue("resolution") : prevAction.getResolution();
+        if (!resolution.isEmpty()){
+            if(!prevAction.getResolution().isEmpty()) {
+                return prevAction.getResolvedDate();
+            }
+            return Integer.parseInt(history.created.toDateTimeISO().toString("yyyyMMdd"));
+        }
+        return 0;
+    }
+
+    private int getDateClosed(final Action prevAction, final History history) {
+        final String status = history.itemExist("status") ? history.getItemLastValue("status") : prevAction.getStatus();
+        if (status.equals("Closed")){
+            if (status.equals(prevAction.getStatus())) {
+                return prevAction.getClosedDate();
+            }
+            return Integer.parseInt(history.created.toDateTimeISO().toString("yyyyMMdd"));
+        }
+        return 0;
+    }
+
     private long getTimeDiff(final DateTime before, final DateTime after) {
         return (after.getMillis() - before.getMillis()) / 1000;
+    }
+
+    private long getDlt(final List<StatusTime> statusTimes, final Action prevAction) {
+        if (prevAction.getStatus().equals("Closed") &&
+                (prevAction.getResolution().equals("Fixed") || prevAction.getResolution().equals("Done")) &&
+                (prevAction.getIssuetype().equals("Bug") || prevAction.getIssuetype().equals("Improvement") || prevAction.getIssuetype().equals("New Feature"))) {
+            long dlt = 0;
+            final String[] statusArray = {
+                    // In Progress
+                    "Accepted", "In Progress", "Reopened", "In Development", "In Dev Blocked",
+                    // Pending Review
+                    "Pending Review", "Pending Code Review", "Pending Dependencies",
+                    // Pending Merge
+                    "Pending Merge", "Pending QA Release", "Conflict",
+                    // Pending Verification
+                    "Pending Verification", "In QA", "Final Verification", "QA Ready",
+                    // Pending Closure
+                    "Pending Closure", "Pending Prod Release", "In Production"
+            };
+
+            for(StatusTime statusTime : statusTimes) {
+                for(String state : statusArray) {
+                    if (statusTime.getStatus().equals(state)) {
+                        dlt += statusTime.getTimeinstatus();
+                        break;
+                    }
+                }
+            }
+            return dlt;
+        }
+        return 0;
     }
 
 }
