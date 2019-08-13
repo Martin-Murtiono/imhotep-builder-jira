@@ -26,11 +26,11 @@ public class Paginator {
     private final boolean buildJiraIssues;
     private final boolean buildJiraIssuesApi;
 
-    public Paginator(final PageProvider pageProvider, final JiraActionsIndexBuilderConfig config, final boolean buildJiraIssues, final boolean buildJiraIssuesApi) {
+    public Paginator(final PageProvider pageProvider, final DateTime startDate, final DateTime endDate, final int lookbackTimeLimit, final boolean buildJiraIssues, final boolean buildJiraIssuesApi) {
         this.pageProvider = pageProvider;
-        this.startDate = JiraActionsUtil.parseDateTime(config.getStartDate());
-        this.endDate = JiraActionsUtil.parseDateTime(config.getStartDate());
-        this.lookbackTimeLimit = config.getJiraIssuesRange();
+        this.startDate = startDate;
+        this.endDate = endDate;
+        this.lookbackTimeLimit = lookbackTimeLimit;
         this.buildJiraIssues = buildJiraIssues;
         this.buildJiraIssuesApi = buildJiraIssuesApi;
     }
@@ -145,7 +145,7 @@ public class Paginator {
      * ATTENTION: Requires that actions be sorted by timestamp, ascending.
      */
     protected static boolean ignoreUpdatedDate(final Issue issue, final List<Action> actions) {
-        return issue.fields.updated.isAfter(actions.get(actions.size() - 1).getTimestamp());
+        return issue.fields.updated.isAfter(actions.get(actions.size()-1).getTimestamp());
     }
 
     /**
@@ -172,7 +172,7 @@ public class Paginator {
             output = actions.stream().filter(a -> a.getTimestamp().isAfter(lastActionTime)).collect(Collectors.toList());
         }
 
-        final DateTime lastTimestamp = actions.get(actions.size() - 1).getTimestamp();
+        final DateTime lastTimestamp = actions.get(actions.size()-1).getTimestamp();
         seenIssues.put(issue.key, lastTimestamp);
         return output;
     }

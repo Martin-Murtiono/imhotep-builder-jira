@@ -78,9 +78,9 @@ public class JiraActionsIndexBuilder {
             fileTime += headerStopwatch.elapsed(TimeUnit.MILLISECONDS);
 
             ApiPageProvider apiPageProvider = new ApiPageProvider(issuesAPICaller, actionFactory, config, writer);
-            Paginator paginator = new Paginator(apiPageProvider, startDate, endDate, config.buildJiraIssues(), false);
+            Paginator paginator = new Paginator(apiPageProvider, startDate, endDate, config.getJiraIssuesRange(), config.buildJiraIssues(), false);
             if (buildJiraIssuesApi) {
-                paginator = new Paginator(apiPageProvider, startDate, endDate, false, false);
+                paginator = new Paginator(apiPageProvider, startDate, endDate, config.getJiraIssuesRange(), false, false);
             }
 
             paginator.process();
@@ -124,7 +124,7 @@ public class JiraActionsIndexBuilder {
                 initializeIssuesApiCaller(issuesAPICaller);
 
                 apiPageProvider = new ApiPageProvider(issuesAPICaller, actionFactory, config, writer);
-                paginator = new Paginator(apiPageProvider, startDate, endDate, config.buildJiraIssues(), true);
+                paginator = new Paginator(apiPageProvider, startDate, endDate, config.getJiraIssuesRange(), config.buildJiraIssues(), true);
 
                 paginator.process();
 
