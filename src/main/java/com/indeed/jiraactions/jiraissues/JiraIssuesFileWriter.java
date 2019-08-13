@@ -28,19 +28,18 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 public class JiraIssuesFileWriter {
-    private static final Logger log = LoggerFactory.getLogger(JiraIssuesIndexBuilder.class);
+    private static final Logger log = LoggerFactory.getLogger(JiraIssuesFileWriter.class);
+    private static final int NUM_RETRIES = 5;
 
     private final JiraActionsIndexBuilderConfig config;
 
     private WriterData writerData;
     private List<String> fields = new ArrayList<>();
 
-
-    public JiraIssuesFileWriter(JiraActionsIndexBuilderConfig config) {
+    public JiraIssuesFileWriter(final JiraActionsIndexBuilderConfig config) {
         this.config = config;
     }
 
-    private static final int NUM_RETRIES = 5;
     public boolean downloadTsv() throws IOException, InterruptedException {
         int backoff = 10000;
         final DateTime date = JiraActionsUtil.parseDateTime(config.getStartDate());
@@ -53,10 +52,10 @@ public class JiraIssuesFileWriter {
         file.deleteOnExit();
         final FileOutputStream stream = new FileOutputStream(file);
 
-        for(int tries = 1; tries <= NUM_RETRIES; tries++) {
+        for (int tries = 1; tries <= NUM_RETRIES; tries++) {
             backoff = Math.max(backoff / 2, 10000);
-            URL url = new URL(config.getJiraissuesDownloadUrl() + "/jiraissues_" + formattedDate + ".tsv.gz/");
-            HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
+            final URL url = new URL(config.getJiraissuesDownloadUrl() + "/jiraissues_" + formattedDate + ".tsv.gz/");
+            final HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
             connection.setRequestProperty("Authorization", basicAuth);
             if (connection.getResponseCode() == 400) {
                 log.debug("Previous Day's TSV missing. Using API method.");
@@ -85,7 +84,7 @@ public class JiraIssuesFileWriter {
     }
 
     public void uploadTsv() {
-        final String iuploadUrl = "https://squall.indeed.com/iupload/repository/qa/index/jiraissues/file/";
+        final String iuploadUrl = String.format("https://squall.indeed.com/iupload/repository/qa/index/jiraissues/file/");
 
         log.info("Uploading to " + iuploadUrl);
 
@@ -105,19 +104,18 @@ public class JiraIssuesFileWriter {
                     .addBinaryBody("file", file, ContentType.MULTIPART_FORM_DATA, file.getName())
                     .build());
 
-            for(int i = 0; i < NUM_RETRIES; i++) {
+            for (int i = 0; i < NUM_RETRIES; i++) {
                 try {
                     final HttpResponse response = HttpClientBuilder.create().build().execute(httpPost);
                     log.info("Http response: " + response.getStatusLine().toString() + ": " + file.getName() + ".");
-                    if(response.getStatusLine().getStatusCode() != 200) {
-                        continue;
+                    if (response.getStatusLine().getStatusCode() == 200) {
+                        return;
                     }
-                    return;
                 } catch (final IOException e) {
                     log.warn("Failed to upload file: " + file.getName() + ".", e);
                 }
             }
-            log.error("Retries expired, unable to upload file: " +file.getName() + ".");
+            log.error("Retries expired, unable to upload file: " + file.getName() + ".");
         }
     }
 

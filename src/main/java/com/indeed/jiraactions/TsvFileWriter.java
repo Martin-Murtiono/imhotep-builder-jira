@@ -36,18 +36,20 @@ public class TsvFileWriter {
     private final Map<DateMidnight, WriterData> writerDataMapJiraIssues;
     private final List<TSVColumnSpec> columnSpecs;
     private final List<TSVColumnSpec> columnSpecsJiraissues;
+    private List<String> fields = new ArrayList<>();
     private final List<String[]> issues = new ArrayList<>();
-    private final boolean jiraIssuesApi;
+    private final boolean buildJiraIssuesApi;
 
-    public TsvFileWriter(final JiraActionsIndexBuilderConfig config, final List<String> linkTypes, final List<String> statusTypes, final boolean jiraIssuesApi) {
+    public TsvFileWriter(final JiraActionsIndexBuilderConfig config, final List<String> linkTypes, final List<String> statusTypes, final boolean buildJiraIssuesApi) {
         this.config = config;
         final int days = Days.daysBetween(JiraActionsUtil.parseDateTime(config.getStartDate()),
                 JiraActionsUtil.parseDateTime(config.getEndDate())).getDays();
         writerDataMap = new HashMap<>(days);
         writerDataMapJiraIssues = new HashMap<>(days);
+
         this.columnSpecs = createColumnSpecs(linkTypes);
         this.columnSpecsJiraissues = createColumnSpecsJiraissues(linkTypes, statusTypes);
-        this.jiraIssuesApi = jiraIssuesApi;
+        this.buildJiraIssuesApi = buildJiraIssuesApi;
     }
 
     private static final String FILENAME_DATE_TIME_PATTERN = "yyyyMMdd";
@@ -57,9 +59,9 @@ public class TsvFileWriter {
 
     public void createFileAndWriteHeaders() throws IOException {
         final DateTime endDate = JiraActionsUtil.parseDateTime(config.getEndDate());
-        for(DateTime date = JiraActionsUtil.parseDateTime(config.getStartDate()); date.isBefore(endDate); date = date.plusDays(1)) {
+        for (DateTime date = JiraActionsUtil.parseDateTime(config.getStartDate()); date.isBefore(endDate); date = date.plusDays(1)) {
             createFileAndWriteHeaders(date);
-            if(jiraIssuesApi) {
+            if(buildJiraIssuesApi) {
                 createFileAndWriteHeadersJiraIssues(date);
             } else {
                 setJiraissuesHeaders();
@@ -69,6 +71,10 @@ public class TsvFileWriter {
 
     public List<String[]> getIssues() {
         return issues;
+    }
+
+    public List<String> getFields() {
+        return fields;
     }
 
     private List<TSVColumnSpec> createColumnSpecs(final List<String> linkTypes) {
@@ -115,7 +121,7 @@ public class TsvFileWriter {
                 .addUserColumns("assignee", Action::getAssignee)
                 .addColumn("category", Action::getCategory)
                 .addColumn("components*|", Action::getComponents)
-                .addIntColumn("createdate", Action::getCreatedDateInt)
+                .addLongColumn("createdate", Action::getCreatedDateLong)
                 .addColumn("duedate", Action::getDueDate)
                 .addTimeColumn("int duedate_time", Action::getDueDateTime)
                 .addColumn("fixversion*|", Action::getFixversions)
@@ -130,11 +136,11 @@ public class TsvFileWriter {
                 .addColumn("status", Action::getStatus)
                 .addColumn("summary", Action::getSummary)
                 .addTimeColumn("time", Action::getTimestamp)
-                .addIntColumn("comments", Action::getComments)
-                .addIntColumn("closedate", Action::getClosedDate)
-                .addIntColumn("resolvedate", Action::getResolvedDate)
-                .addIntColumn("lastupdated", Action::getLastUpdated)
-                .addLongColumn("dlt", Action::getDlt)
+                .addLongColumn("comments", Action::getComments)
+                .addLongColumn("closedate", Action::getClosedDate)
+                .addLongColumn("resolutiondate", Action::getResolutionDate)
+                .addLongColumn("lastupdated", Action::getLastUpdated)
+                .addLongColumn("delivery_lead_time", Action::getDeliveryLeadTime)
                 .addStatusTimeColumns(statusTypes)
                 .addLinkColumns(linkTypes);
 
@@ -187,7 +193,7 @@ public class TsvFileWriter {
     }
 
     public void writeActions(final List<Action> actions) throws IOException {
-        if(actions.isEmpty()) {
+        if (actions.isEmpty()) {
             return;
         }
 
@@ -218,18 +224,17 @@ public class TsvFileWriter {
     }
 
     private void setJiraissuesHeaders() {
-        final String[] headerLine = columnSpecsJiraissues.stream()
+        fields = columnSpecsJiraissues.stream()
                 .map(TSVColumnSpec::getHeader)
-                .toArray(String[]::new);
-        issues.add(headerLine);
+                .collect(Collectors.toList());
     }
 
     public void writeIssue(final Action action) throws IOException {
-        if(action == null) {
+        if (action == null) {
             return;
         }
 
-        if(jiraIssuesApi) {
+        if (buildJiraIssuesApi) {
             final WriterData writerData = writerDataMapJiraIssues.get(action.getTimestamp().toDateMidnight());
             final BufferedWriter bw = writerData.getBufferedWriter();
             writerData.setWritten();
@@ -293,7 +298,7 @@ public class TsvFileWriter {
             if (wd.isWritten()) {
                 File file = wd.getFile();
                 HttpPost httpPost = new HttpPost(iuploadUrl);
-                if(file.getName().startsWith("jiraissues")) {
+                if (file.getName().startsWith("jiraissues")) {
 
                     httpPost = new HttpPost(iuploadUrlJiraIssues);
                     final byte[] buffer = new byte[1024];
@@ -323,14 +328,13 @@ public class TsvFileWriter {
                         .addBinaryBody("file", file, ContentType.MULTIPART_FORM_DATA, file.getName())
                         .build());
 
-                for(int i = 0; i < NUM_RETRIES; i++) {
+                for (int i = 0; i < NUM_RETRIES; i++) {
                     try {
                         final HttpResponse response = HttpClientBuilder.create().build().execute(httpPost);
                         log.info("Http response: " + response.getStatusLine().toString() + ": " + wd.file.getName() + ".");
-                        if(response.getStatusLine().getStatusCode() != 200) {
-                            continue;
+                        if (response.getStatusLine().getStatusCode() == 200) {
+                            return;
                         }
-                        return;
                     } catch (final IOException e) {
                         log.warn("Failed to upload file: " + wd.file.getName() + ".", e);
                     }

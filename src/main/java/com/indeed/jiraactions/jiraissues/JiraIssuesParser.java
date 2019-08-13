@@ -16,24 +16,27 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class JiraIssuesParser {
-    private static final Logger log = LoggerFactory.getLogger(JiraIssuesIndexBuilder.class);
-    private static TsvParserSettings settings = setupSettings(new TsvParserSettings());
+    private static final Logger log = LoggerFactory.getLogger(JiraIssuesParser.class);
+    private static TsvParserSettings settings = setupSettings();
 
     private final JiraIssuesProcess process;
     private final JiraIssuesFileWriter fileWriter;
 
+    private final List<String> newFields;
     private final List<String[]> newIssues;
     private File file;
     private FileReader reader;
     private TsvParser parser;
 
-    public JiraIssuesParser(final JiraIssuesFileWriter fileWriter, final JiraIssuesProcess process, final List<String[]> newIssues) {
+    public JiraIssuesParser(final JiraIssuesFileWriter fileWriter, final JiraIssuesProcess process, final List<String> newFields, final List<String[]> newIssues) {
         this.fileWriter = fileWriter;
         this.process = process;
+        this.newFields = newFields;
         this.newIssues = newIssues;
     }
 
-    private static TsvParserSettings setupSettings(final TsvParserSettings settings) {
+    private static TsvParserSettings setupSettings() {
+        final TsvParserSettings settings = new TsvParserSettings();
         settings.getFormat().setLineSeparator("\n");
         settings.setMaxColumns(1000);
         settings.setMaxCharsPerColumn(10000);
@@ -49,7 +52,7 @@ public class JiraIssuesParser {
 
         fileWriter.setFields(Arrays.stream(newIssues.get(0)).collect(Collectors.toList()));   // Sets fields of the TSV using new issues.
 
-        process.setNewFields(Arrays.stream(newIssues.get(0)).collect(Collectors.toList()));
+        process.setNewFields(newFields);
         process.setNewIssues(newIssues);
         process.setOldFields(Arrays.stream(parser.parseNext()).collect(Collectors.toList()));
         process.convertToMap();
@@ -58,13 +61,13 @@ public class JiraIssuesParser {
     public void parseTsv() {
         final Stopwatch stopwatch = Stopwatch.createStarted();
         int counter = 0;
-        while(true) {
+        while (true) {
             final String[] issue = parser.parseNext();
             if (issue == null) {
                 stopwatch.stop();
                 break;
             } else {
-                if(process.compareAndUpdate(issue) != null) {
+                if (process.compareAndUpdate(issue) != null) {
                     fileWriter.writeIssue(process.compareAndUpdate(issue));
                 }
                 counter++;
@@ -74,8 +77,10 @@ public class JiraIssuesParser {
             }
         }
         log.debug("Updated/Replaced {} Issues.", counter);
-        log.debug("Fields not in API {}", process.getNonApiStatuses());
-        for(Map<String, String> issue : process.getRemainingIssues()) {     // Adds the remaining issues
+        if (!process.getNonApiStatuses().isEmpty()) {
+            log.warn("Fields not in API {}", process.getNonApiStatuses());
+        }
+        for (final Map<String, String> issue : process.getRemainingIssues()) {     // Adds the remaining issues
             fileWriter.writeIssue(issue);
         }
     }

@@ -28,7 +28,7 @@ public class IssuesAPICaller {
     private final String urlBase;
     private final ApiCaller apiCaller;
     private final JiraActionsIndexBuilderConfig config;
-    private final boolean jiraIssuesApi;
+    private final boolean buildJiraIssuesApi;
 
     // For Pagination
     private final int maxPerPage; // Max number of issues per page
@@ -38,10 +38,10 @@ public class IssuesAPICaller {
 
     private int backoff = 10_000;
 
-    public IssuesAPICaller(final JiraActionsIndexBuilderConfig config, final ApiCaller apiCaller, final boolean jiraIssuesApi) throws UnsupportedEncodingException {
+    public IssuesAPICaller(final JiraActionsIndexBuilderConfig config, final ApiCaller apiCaller, final boolean buildJiraIssuesApi) throws UnsupportedEncodingException {
         this.config = config;
         this.apiCaller = apiCaller;
-        this.jiraIssuesApi = jiraIssuesApi;
+        this.buildJiraIssuesApi = buildJiraIssuesApi;
 
         maxPerPage = config.getJiraBatchSize()*2;
         batchSize = config.getJiraBatchSize();
@@ -64,7 +64,7 @@ public class IssuesAPICaller {
                 log.error("On try {}/5, caught IOException getting {} issues, after {} milliseconds.",
                         tries, batchSize, end - start);
 
-                if(tries >= 5) {
+                if (tries >= 5) {
                     log.error("Tried too many times to get issues and failed, aborting.", e);
                     throw new RuntimeException(e);
                 }
@@ -119,7 +119,7 @@ public class IssuesAPICaller {
                 + "&" + getMaxResults()
                 + "&" + getStartAtParam();
 
-        if(log.isDebugEnabled()) {
+        if (log.isDebugEnabled()) {
             log.debug("Trying URL: {}", url);
         }
         log.info("{}% complete, {}/{}", (float)start*100/numTotal, start, numTotal);
@@ -158,18 +158,18 @@ public class IssuesAPICaller {
          */
 
         String start = getDateStringInJiraTime(config.getStartDate());
-        if(jiraIssuesApi) {
+        if (buildJiraIssuesApi) {
             start = getDateStringInJiraTime(JiraActionsUtil.parseDateTime(config.getStartDate()).minusMonths(6).toString());
         }
         final String end = getDateStringInJiraTime(config.getEndDate());
         query.append("updatedDate>=\"").append(start)
                 .append("\" AND createdDate<\"").append(end).append("\"");
 
-        if(!StringUtils.isEmpty(config.getJiraProject())) {
+        if (!StringUtils.isEmpty(config.getJiraProject())) {
             query.append(" AND project IN (").append(config.getJiraProject()).append(")");
         }
 
-        if(!StringUtils.isEmpty(config.getExcludedJiraProject())) {
+        if (!StringUtils.isEmpty(config.getExcludedJiraProject())) {
             query.append(" AND project NOT IN (").append(config.getExcludedJiraProject()).append(")");
         }
 
@@ -179,12 +179,12 @@ public class IssuesAPICaller {
     }
 
     private String getFieldsParam() {
-        if(config.getCustomFields() == null || config.getCustomFields().length == 0) {
+        if (config.getCustomFields() == null || config.getCustomFields().length == 0) {
             return String.format("fields=%s", config.getJiraFields());
         } else {
             return "fields=" +
                     String.join(",", config.getJiraFields(),
-                    String.join(",", Arrays.stream(config.getCustomFields()).flatMap(x -> Arrays.stream(x.getCustomFieldId())).collect(Collectors.toList())));
+                            String.join(",", Arrays.stream(config.getCustomFields()).flatMap(x -> Arrays.stream(x.getCustomFieldId())).collect(Collectors.toList())));
         }
     }
 

@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.joda.time.DateTime;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 public class TSVSpecBuilder {
@@ -49,16 +50,11 @@ public class TSVSpecBuilder {
         return this;
     }
 
-    public TSVSpecBuilder addIntColumn(final String header, final Function<Action, Integer> intExtractor) {
-        addColumn(header, action -> String.valueOf(intExtractor.apply(action)));
-        return this;
-    }
-
     public TSVSpecBuilder addStatusTimeColumns(final List<String> statusTypes) {
-        for(final String type : statusTypes) {
-            final Function<Action, Long> totalStatusTime = action -> getTotalStatusTime(type, action);
-            final Function<Action, Long> timeToFirst = action -> getTimeToFirst(type, action);
-            final Function<Action, Long> timeToLast = action -> getTimeToLast(type, action);
+        for (final String type : statusTypes) {
+            final Function<Action, Long> totalStatusTime = action -> getTotalStatusTime(type, action.getStatusTimes());
+            final Function<Action, Long> timeToFirst = action -> getTimeToFirst(type, action.getStatusTimes());
+            final Function<Action, Long> timeToLast = action -> getTimeToLast(type, action.getStatusTimes());
             String formattedType = type.toLowerCase()
                     .replace(" ", "_")
                     .replace("-", "_")
@@ -87,7 +83,7 @@ public class TSVSpecBuilder {
     }
 
     public TSVSpecBuilder addLinkColumns(final List<String> linkTypes) {
-        for(final String type : linkTypes) {
+        for (final String type : linkTypes) {
             final Function<Action, String> valueExtractor = action -> getLinkValue(type, action);
             addColumn(
                     String.format("link_%s*", type.replace(" ", "_")), valueExtractor);
@@ -128,43 +124,28 @@ public class TSVSpecBuilder {
         return String.join(" ", values);
     }
 
-    private static long getTotalStatusTime(final String statusType, final Action action) {
-        final List<StatusTime> st = action.getStatustimes();
-        long output = 0;
-        for(StatusTime statusTime : st) {
-            if (statusTime.getStatus().equals(statusType)) {
-                output = output + statusTime.getTimeinstatus();
-            }
+    private static long getTotalStatusTime(final String statusType, final Map<String, StatusTime> statusTimeMap) {
+        if (statusTimeMap.containsKey(statusType)) {
+            return statusTimeMap.get(statusType).getTimeinstatus();
         }
-        return output;
+        return 0;
     }
 
-    private static long getTimeToFirst(final String statusType, final Action action) {
-        final List<StatusTime> st = action.getStatustimes();
-        long output = 0;
-        for(StatusTime statusTime : st) {
-            if (statusTime.getStatus().equals(statusType)) {
-                output = output + statusTime.getTimetofirst();
-            }
+    private static long getTimeToFirst(final String statusType, final Map<String, StatusTime> statusTimeMap) {
+        if (statusTimeMap.containsKey(statusType)) {
+            return statusTimeMap.get(statusType).getTimetofirst();
         }
-        return output;
+        return 0;
     }
 
-    private static long getTimeToLast(final String statusType, final Action action) {
-        final List<StatusTime> st = action.getStatustimes();
-        long output = 0;
-        for(StatusTime statusTime : st) {
-            if (statusTime.getStatus().equals(statusType)) {
-                output = output + statusTime.getTimetolast();
-            }
+    private static long getTimeToLast(final String statusType, final Map<String, StatusTime> statusTimeMap) {
+        if (statusTimeMap.containsKey(statusType)) {
+            return statusTimeMap.get(statusType).getTimetolast();
         }
-        return output;
+        return 0;
     }
 
     private static String getAllStatuses(final Action action) {
-        final Iterable<String> values = action.getStatustimes().stream()
-                .map(StatusTime::getStatus)::iterator;
-
-        return String.join("|", values);
+        return String.join("|", action.getStatusHistory());
     }
 }

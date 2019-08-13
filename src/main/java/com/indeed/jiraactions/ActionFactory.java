@@ -1,5 +1,6 @@
 package com.indeed.jiraactions;
 
+import com.google.common.collect.ImmutableList;
 import com.indeed.jiraactions.api.customfields.CustomFieldApiParser;
 import com.indeed.jiraactions.api.customfields.CustomFieldDefinition;
 import com.indeed.jiraactions.api.links.LinkFactory;
@@ -12,17 +13,21 @@ import com.indeed.jiraactions.api.statustimes.StatusTimeFactory;
 import org.joda.time.DateTime;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public class ActionFactory {
+    final private static List<String> DLT_RESOLUTIONS = ImmutableList.of("Fixed", "Done");
+    final private static List<String> DLT_ISSUES = ImmutableList.of("Bug", "Improvement", "New Feature");
 
     private final UserLookupService userLookupService;
     private final CustomFieldApiParser customFieldParser;
     private final JiraActionsIndexBuilderConfig config;
     private final LinkFactory linkFactory = new LinkFactory();
-    private final StatusTimeFactory statusTimeFactory = new StatusTimeFactory();
+    private final String[] dltStatuses;
 
     @SuppressWarnings("WeakerAccess")
     public ActionFactory(final UserLookupService userLookupService,
@@ -31,6 +36,7 @@ public class ActionFactory {
         this.userLookupService = userLookupService;
         this.customFieldParser = customFieldApiParser;
         this.config = config;
+        this.dltStatuses = config.getDeliveryLeadTimeFields().split(",");
     }
 
     public Action create(final Issue issue) throws IOException {
@@ -61,16 +67,17 @@ public class ActionFactory {
                 .components(issue.initialValue("components"))
                 .labels(issue.initialValue("labels"))
                 .createdDate(issue.fields.created.toString("yyyy-MM-dd"))
-                .createdDateInt(Integer.parseInt(issue.fields.created.toString("yyyyMMdd")))
+                .createdDateLong(Long.parseLong(issue.fields.created.toString("yyyyMMdd")))
                 .lastUpdated(0)
                 .closedDate(0)
-                .resolvedDate(0)
+                .resolutionDate(getDateResolved(issue.initialValue("resolutiondate")))
                 .comments(0)
-                .dlt(0)
-                .statustimes(statusTimeFactory.firstStatusTime(issue.initialValue("status")))
+                .deliveryLeadTime(0)
+                .statusTimes(StatusTimeFactory.firstStatusTime(issue.initialValue("status")))
+                .statusHistory(createStatusHistory(issue.initialValue("status")))
                 .links(Collections.emptySet());
 
-            for(final CustomFieldDefinition customFieldDefinition : config.getCustomFields()) {
+            for (final CustomFieldDefinition customFieldDefinition : config.getCustomFields()) {
                 builder.putCustomFieldValues(customFieldDefinition, customFieldParser.parseInitialValue(customFieldDefinition, issue));
             }
 
@@ -109,16 +116,16 @@ public class ActionFactory {
                 .components(history.itemExist("components") ? history.getItemLastValue("components") : prevAction.getComponents())
                 .labels(history.itemExist("labels") ? history.getItemLastValue("labels") : prevAction.getLabels())
                 .createdDate(prevAction.getCreatedDate())
-                .createdDateInt(prevAction.getCreatedDateInt())
+                .createdDateLong(prevAction.getCreatedDateLong())
                 .closedDate(getDateClosed(prevAction, history))
-                .resolvedDate(getDateResolved(prevAction, history))
-                .lastUpdated(0)
+                .resolutionDate(history.itemExist("resolutiondate") ? getDateResolved(history.getItemLastValue("resolutiondate")) : prevAction.getResolutionDate())
+                .lastUpdated(0) // This field is used internally to filter issues longer than 6 months. It's only used by jiraissues so it will always go through the toCurrent() method where it takes the date of the previous action.
                 .comments(prevAction.getComments())
-                .dlt(0)
+                .deliveryLeadTime(0)
                 .links(linkFactory.mergeLinks(prevAction.getLinks(), history.getAllItems("link")))
-                .statustimes(statusTimeFactory.getStatusTimeUpdate(prevAction.getStatustimes(), history, prevAction));
-
-        for(final CustomFieldDefinition customFieldDefinition : config.getCustomFields()) {
+                .statusTimes(StatusTimeFactory.getStatusTimeUpdate(prevAction.getStatusTimes(), history, prevAction))
+                .statusHistory(addStatusHistory(prevAction.getStatusHistory(), prevAction, history.itemExist("status") ? history.getItemLastValue("status") : prevAction.getStatus()));
+        for (final CustomFieldDefinition customFieldDefinition : config.getCustomFields()) {
             builder.putCustomFieldValues(customFieldDefinition, customFieldParser.parseNonInitialValue(customFieldDefinition, prevAction, history));
         }
 
@@ -135,8 +142,8 @@ public class ActionFactory {
                 .timeinstate(timeInState(prevAction, comment))
                 .timesinceaction(getTimeDiff(prevAction.getTimestamp(), comment.created))
                 .timestamp(comment.created)
-                .comments(prevAction.getComments()+1)
-                .statustimes(statusTimeFactory.getStatusTimeComment(prevAction.getStatustimes(), comment, prevAction))
+                .comments(prevAction.getComments() + 1)
+                .statusTimes(StatusTimeFactory.getStatusTimeComment(prevAction.getStatusTimes(), comment, prevAction))
                 .build();
     }
 
@@ -146,8 +153,8 @@ public class ActionFactory {
                 .issueage(prevAction.getIssueage() + getTimeDiff(prevAction.getTimestamp(), JiraActionsUtil.parseDateTime(config.getEndDate())))
                 .timestamp(JiraActionsUtil.parseDateTime(config.getStartDate()))
                 .lastUpdated(Integer.parseInt(prevAction.getTimestamp().toString("yyyyMMdd")))
-                .statustimes(statusTimeFactory.getStatusTimeCurrent(prevAction.getStatustimes(), prevAction, JiraActionsUtil.parseDateTime(config.getEndDate())))
-                .dlt(getDlt(statusTimeFactory.getStatusTimeCurrent(prevAction.getStatustimes(), prevAction, JiraActionsUtil.parseDateTime(config.getEndDate())), prevAction))
+                .statusTimes(StatusTimeFactory.getStatusTimeCurrent(prevAction.getStatusTimes(), prevAction, JiraActionsUtil.parseDateTime(config.getEndDate())))
+                .deliveryLeadTime(getDeliveryLeadTime(StatusTimeFactory.getStatusTimeCurrent(prevAction.getStatusTimes(), prevAction, JiraActionsUtil.parseDateTime(config.getEndDate())), prevAction))
                 .build();
     }
 
@@ -160,28 +167,25 @@ public class ActionFactory {
     }
 
     private long timeInState(final Action prevAction, final DateTime changeTimestamp) {
-        if(!Objects.equals(prevAction.getPrevstatus(), prevAction.getStatus())) {
+        if (!Objects.equals(prevAction.getPrevstatus(), prevAction.getStatus())) {
             return getTimeDiff(prevAction.getTimestamp(), changeTimestamp);
         }
 
         return getTimeDiff(prevAction.getTimestamp(), changeTimestamp) + prevAction.getTimeinstate();
     }
 
-    private int getDateResolved(final Action prevAction, final History history) {
-        final String resolution = history.itemExist("resolution") ? history.getItemLastValue("resolution") : prevAction.getResolution();
-        if (!resolution.isEmpty()){
-            if(!prevAction.getResolution().isEmpty()) {
-                return prevAction.getResolvedDate();
-            }
-            return Integer.parseInt(history.created.toDateTimeISO().toString("yyyyMMdd"));
+    private long getDateResolved(final String resolutionDate) {
+        if (resolutionDate == null || resolutionDate.equals("")) {
+            return 0;
+        } else {
+            return Long.parseLong(resolutionDate.split("T")[0].replaceAll("[^\\d]", ""));
         }
-        return 0;
     }
 
-    private int getDateClosed(final Action prevAction, final History history) {
+    private long getDateClosed(final Action prevAction, final History history) {
         final String status = history.itemExist("status") ? history.getItemLastValue("status") : prevAction.getStatus();
-        if (status.equals("Closed")){
-            if (status.equals(prevAction.getStatus())) {
+        if (status.equals("Closed")) {
+            if (prevAction.getStatus().equals(status)) {
                 return prevAction.getClosedDate();
             }
             return Integer.parseInt(history.created.toDateTimeISO().toString("yyyyMMdd"));
@@ -193,34 +197,31 @@ public class ActionFactory {
         return (after.getMillis() - before.getMillis()) / 1000;
     }
 
-    private long getDlt(final List<StatusTime> statusTimes, final Action prevAction) {
-        if
-        (prevAction.getStatus().equals("Closed") &&
-        (prevAction.getResolution().equals("Fixed") || prevAction.getResolution().equals("Done")) &&
-        (prevAction.getIssuetype().equals("Bug") || prevAction.getIssuetype().equals("Improvement") || prevAction.getIssuetype().equals("New Feature"))) {
-            long dlt = 0;
-            final String[] statusArray = {
-                    // In Progress
-                    "Accepted", "In Progress", "Reopened", "In Development", "In Dev Blocked",
-                    // Pending Review
-                    "Pending Review", "Pending Code Review", "Pending Dependencies",
-                    // Pending Merge
-                    "Pending Merge", "Pending QA Release", "Conflict",
-                    // Pending Verification
-                    "Pending Verification", "In QA", "Final Verification", "QA Ready",
-                    // Pending Closure
-                    "Pending Closure", "Pending Prod Release", "In Production"
-            };
+    private List<String> createStatusHistory(final String status) {
+        final List<String> statusHistory = new ArrayList<>();
+        statusHistory.add(status);
+        return statusHistory;
+    }
 
-            for(StatusTime statusTime : statusTimes) {
-                for(String state : statusArray) {
-                    if (statusTime.getStatus().equals(state)) {
-                        dlt += statusTime.getTimeinstatus();
-                        break;
-                    }
+    private List<String> addStatusHistory(final List<String> prevHistory, final Action prevAction, final String status) {
+        final List<String> statusHistory = new ArrayList<>(prevHistory);
+        if (!status.equals(prevAction.getStatus())) {
+            statusHistory.add(status);
+        }
+        return statusHistory;
+    }
+
+    private long getDeliveryLeadTime(final Map<String, StatusTime> statusTimes, final Action action) {
+        if (action.getStatus().equals("Closed") &&
+        (DLT_RESOLUTIONS.contains(action.getResolution()) &&
+        (DLT_ISSUES.contains(action.getIssuetype())))) {
+            long deliveryLeadTime = 0;
+            for (final String status : dltStatuses) {
+                if (statusTimes.containsKey(status)) {
+                    deliveryLeadTime += statusTimes.get(status).getTimeinstatus();
                 }
             }
-            return dlt;
+            return deliveryLeadTime;
         }
         return 0;
     }

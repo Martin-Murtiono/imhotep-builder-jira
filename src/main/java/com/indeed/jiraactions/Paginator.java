@@ -22,15 +22,17 @@ public class Paginator {
     private final PageProvider pageProvider;
     private final DateTime startDate;
     private final DateTime endDate;
-    private final boolean jiraIssues;
-    private final boolean jiraIssuesApi;
+    private final int lookbackTimeLimit;
+    private final boolean buildJiraIssues;
+    private final boolean buildJiraIssuesApi;
 
-    public Paginator(final PageProvider pageProvider, final DateTime startDate, final DateTime endDate, final boolean jiraIssues, final boolean jiraIssuesApi) {
+    public Paginator(final PageProvider pageProvider, final JiraActionsIndexBuilderConfig config, final boolean buildJiraIssues, final boolean buildJiraIssuesApi) {
         this.pageProvider = pageProvider;
-        this.startDate = startDate;
-        this.endDate = endDate;
-        this.jiraIssues = jiraIssues;
-        this.jiraIssuesApi = jiraIssuesApi;
+        this.startDate = JiraActionsUtil.parseDateTime(config.getStartDate());
+        this.endDate = JiraActionsUtil.parseDateTime(config.getStartDate());
+        this.lookbackTimeLimit = config.getJiraIssuesRange();
+        this.buildJiraIssues = buildJiraIssues;
+        this.buildJiraIssuesApi = buildJiraIssuesApi;
     }
 
     /*
@@ -71,25 +73,23 @@ public class Paginator {
                 final Stopwatch stopwatch = Stopwatch.createStarted();
                 final List<Issue> issues = Lists.newArrayList(pageProvider.getPage());
                 log.debug(String.join(", ", issues.stream().map(x -> x.key).collect(Collectors.toList())));
-                for(final Issue issue : issues) {
+                for (final Issue issue : issues) {
                     try {
                         final List<Action> preFilteredActions = pageProvider.getActions(issue);
                         final List<Action> actions = getActionsFilterByLastSeen(seenIssues, issue, preFilteredActions);
                         final List<Action> filteredActions = actions.stream().filter(a -> a.isInRange(startDate, endDate)).collect(Collectors.toList());
 
-                        if(jiraIssues) {
-                            if(jiraIssuesApi) { // Jiraissues API
-                                final List<Action> apiActions = actions.stream().filter(a -> a.isInRange(startDate.minusMonths(6), endDate)).collect(Collectors.toList());
-                                if(!apiActions.isEmpty()) {
-                                    final Action action = pageProvider.getJiraissues(apiActions.get(apiActions.size()-1), issue);
-                                    if(preFilteredActions.get(preFilteredActions.size()-1).getTimestamp().isBefore(startDate)) {
-                                    }
-                                    if(action.getLastUpdated()>=Integer.parseInt(startDate.minusMonths(6).toString("yyyyMMdd"))) {
+                        if (buildJiraIssues) {
+                            if (buildJiraIssuesApi) { // Jiraissues API
+                                final List<Action> apiActions = actions.stream().filter(a -> a.isInRange(startDate.minusMonths(lookbackTimeLimit), endDate)).collect(Collectors.toList());
+                                if (!apiActions.isEmpty()) {
+                                    final Action action = pageProvider.getJiraissues(apiActions.get(apiActions.size() - 1), issue);
+                                    if (action.getLastUpdated()>=Integer.parseInt(startDate.minusMonths(6).toString("yyyyMMdd"))) {
                                         pageProvider.writeIssue(action);
                                     }
                                 }
                             } else {    // Jiraactions & Jiraissues TSV
-                                if(!filteredActions.isEmpty()) {
+                                if (!filteredActions.isEmpty()) {
                                     final Action action = pageProvider.getJiraissues(filteredActions.get(filteredActions.size() - 1), issue);
                                     pageProvider.writeIssue(action);
                                 }
@@ -100,7 +100,7 @@ public class Paginator {
                         }
 
                         final boolean ignoreForEndDetection = ignoreUpdatedDate(issue, preFilteredActions);
-                        if(!firstPass // Don't bail out the first time through
+                        if (!firstPass // Don't bail out the first time through
                                 && preFilteredActions.size() > 0 // It had issues in our time range; so we can tell if it was filtered
                                 && actions.size() == 0// There is nothing new since the last time we saw it
                                 && !ignoreForEndDetection // Ignore out of order issues
@@ -111,7 +111,7 @@ public class Paginator {
                             break;
                         }
                         seenThisLoop.add(issue.key);
-                        if(preFilteredActions.size() > 0 && !ignoreForEndDetection) {
+                        if (preFilteredActions.size() > 0 && !ignoreForEndDetection) {
                             firstIssue = false;
                         }
                     } catch (final Exception e) {
@@ -123,7 +123,7 @@ public class Paginator {
                 log.trace("{} ms to get actions from a set of issues.", stopwatch.elapsed(TimeUnit.MILLISECONDS));
 
                 // Otherwise we'd do another entire pass of the dataset
-                if(reFoundTheBeginning) {
+                if (reFoundTheBeginning) {
                     break;
                 }
             }
@@ -145,7 +145,7 @@ public class Paginator {
      * ATTENTION: Requires that actions be sorted by timestamp, ascending.
      */
     protected static boolean ignoreUpdatedDate(final Issue issue, final List<Action> actions) {
-        return issue.fields.updated.isAfter(actions.get(actions.size()-1).getTimestamp());
+        return issue.fields.updated.isAfter(actions.get(actions.size() - 1).getTimestamp());
     }
 
     /**
@@ -159,12 +159,12 @@ public class Paginator {
     @VisibleForTesting
     protected static List<Action> getActionsFilterByLastSeen(final Map<String, DateTime> seenIssues, final Issue issue,
                                                              final List<Action> actions) {
-        if(actions.size() == 0) {
+        if (actions.size() == 0) {
             return actions;
         }
 
         final List<Action> output;
-        if(!seenIssues.containsKey(issue.key)) {
+        if (!seenIssues.containsKey(issue.key)) {
             output = actions;
         } else {
             final DateTime lastActionTime = seenIssues.remove(issue.key); // Need to change its ordering in the map
@@ -172,7 +172,7 @@ public class Paginator {
             output = actions.stream().filter(a -> a.getTimestamp().isAfter(lastActionTime)).collect(Collectors.toList());
         }
 
-        final DateTime lastTimestamp = actions.get(actions.size()-1).getTimestamp();
+        final DateTime lastTimestamp = actions.get(actions.size() - 1).getTimestamp();
         seenIssues.put(issue.key, lastTimestamp);
         return output;
     }

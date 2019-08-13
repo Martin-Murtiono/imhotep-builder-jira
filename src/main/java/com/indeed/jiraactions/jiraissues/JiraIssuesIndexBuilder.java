@@ -16,13 +16,14 @@ public class JiraIssuesIndexBuilder {
     private final JiraIssuesParser parser;
     private final JiraIssuesFileWriter fileWriter;
     private final JiraIssuesProcess process;
+    private long downloadTime = 0;
     private long processTime = 0;
     private long uploadTime = 0;
 
-    public JiraIssuesIndexBuilder(final JiraActionsIndexBuilderConfig config, final List<String[]> issues) {
+    public JiraIssuesIndexBuilder(final JiraActionsIndexBuilderConfig config, final List<String> fields, final List<String[]> issues) {
         fileWriter = new JiraIssuesFileWriter(config);
-        process = new JiraIssuesProcess(JiraActionsUtil.parseDateTime(config.getStartDate()));
-        parser = new JiraIssuesParser(fileWriter, process, issues);
+        process = new JiraIssuesProcess(JiraActionsUtil.parseDateTime(config.getStartDate()), config.getJiraIssuesRange());
+        parser = new JiraIssuesParser(fileWriter, process, fields, issues);
     }
 
     public void run() throws Exception {
