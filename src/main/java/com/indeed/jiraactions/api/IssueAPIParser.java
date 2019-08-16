@@ -21,7 +21,7 @@ public class IssueAPIParser {
         final Issue issue;
         try {
             issue = mapper.treeToValue(issueNode, Issue.class);
-            if(issue.fields.created == null) {
+            if (issue.fields.created == null) {
                 log.warn("Invalid issue {} with no date.", issue.key);
                 return null;
             }

@@ -43,7 +43,7 @@ public class JiraActionsIndexBuilder {
 
             boolean buildJiraIssuesApi = false;
             final Stopwatch downloadStopwatch = Stopwatch.createStarted();
-            if(config.buildJiraIssues() ) {
+            if (config.buildJiraIssues() ) {
                 final JiraIssuesIndexBuilder jiraIssuesIndexBuilder = new JiraIssuesIndexBuilder(config, new ArrayList<>(), new ArrayList<>());
                 buildJiraIssuesApi = jiraIssuesIndexBuilder.downloadTsv();
             }

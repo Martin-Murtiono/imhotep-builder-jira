@@ -232,7 +232,7 @@ public class TsvFileWriter {
         if (action == null) {
             return;
         }
-        if(buildJiraIssuesApi) {
+        if (buildJiraIssuesApi) {
             final WriterData writerData = writerDataMapJiraIssues.get(action.getTimestamp().toDateMidnight());
             final BufferedWriter bw = writerData.getBufferedWriter();
             writerData.setWritten();
@@ -267,7 +267,7 @@ public class TsvFileWriter {
     }
 
     private static final int NUM_RETRIES = 5;
-    public void uploadTsvFile(final boolean jiraIssuesApi) {
+    public void uploadTsvFile(final boolean buildJiraIssuesApi) {
         if (StringUtils.isEmpty(config.getIuploadURL())) {
             log.info("Skipping upload because iuploadurl is empty.");
             return;
@@ -281,7 +281,7 @@ public class TsvFileWriter {
         final String userPass = config.getIuploadUsername() + ":" + config.getIuploadPassword();
         final String basicAuth = "Basic " + new String(new Base64().encode(userPass.getBytes()));
 
-        final Map<DateMidnight, WriterData> dataMap = jiraIssuesApi ? writerDataMapJiraIssues : writerDataMap;
+        final Map<DateMidnight, WriterData> dataMap = buildJiraIssuesApi ? writerDataMapJiraIssues : writerDataMap;
         dataMap.values().forEach(wd -> {
             try {
                 wd.getBufferedWriter().close();

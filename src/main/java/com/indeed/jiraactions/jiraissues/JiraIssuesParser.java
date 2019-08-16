@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 
 public class JiraIssuesParser {
     private static final Logger log = LoggerFactory.getLogger(JiraIssuesParser.class);
-    private static TsvParserSettings settings = setupSettings();
+    private static final TsvParserSettings settings = setupSettings();
 
     private final JiraIssuesProcess process;
     private final JiraIssuesFileWriter fileWriter;
@@ -64,7 +64,6 @@ public class JiraIssuesParser {
         while (true) {
             final String[] issue = parser.parseNext();
             if (issue == null) {
-                stopwatch.stop();
                 break;
             } else {
                 final Map<String, String> processedIssue = process.compareAndUpdate(issue);
@@ -77,6 +76,7 @@ public class JiraIssuesParser {
                 }
             }
         }
+        stopwatch.stop();
         log.debug("Updated/Replaced {} Issues.", counter);
         if (!process.getNonApiStatuses().isEmpty()) {
             log.warn("Fields not in API {}", process.getNonApiStatuses());
